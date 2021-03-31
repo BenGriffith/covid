@@ -39,16 +39,16 @@ extract.USAFacts(tmp_county_path, 'population', 'csv', 'x', utils.population_url
 
 
 # Extract Financial data
-# stock_symbols = extract.FinancialData.get_stock_symbols()
-# extract.FinancialData.create_directories(tmp_stock_path, stock_symbols)
-# extract.StocksDaily(tmp_stock_path, 'daily', 'json', 'w', stock_symbols, 'TIME_SERIES_DAILY', utils.url_vantage, utils.headers_stocks)
-# extract.StocksWeekly(tmp_stock_path, 'weekly', 'json', 'w', stock_symbols, 'TIME_SERIES_WEEKLY', utils.url_vantage, utils.headers_stocks)
-# extract.StocksMonthly(tmp_stock_path, 'monthly', 'json', 'w', stock_symbols, 'TIME_SERIES_MONTHLY', utils.url_vantage, headers_stocks)
-# extract.Sector(tmp_indicator_path, 'sector', 'json', 'w', 'SECTOR', utils.url_vantage, utils.headers_indicators)
-# extract.Indicator(tmp_indicator_path, 'unemployment', 'json', 'w', utils.unemployment_url, utils.headers_indicators)
-# extract.Indicator(tmp_indicator_path, 'sentiment', 'json', 'w', utils.consumer_sentiment_url, utils.headers_indicators)
-# extract.Indicator(tmp_indicator_path, 'inflation', 'json', 'w', utils.inflation_url, utils.headers_indicators)
-# extract.Indicator(tmp_indicator_path, 'mortgage', 'json', 'w', utils.mortgage_url, utils.headers_indicators)
+stock_symbols = extract.FinancialData.get_stock_symbols()
+extract.FinancialData.create_directories(tmp_stock_path, stock_symbols)
+extract.StocksDaily(tmp_stock_path, 'daily', 'json', 'w', stock_symbols, 'TIME_SERIES_DAILY', utils.url_vantage, utils.headers_stocks)
+extract.StocksWeekly(tmp_stock_path, 'weekly', 'json', 'w', stock_symbols, 'TIME_SERIES_WEEKLY', utils.url_vantage, utils.headers_stocks)
+extract.StocksMonthly(tmp_stock_path, 'monthly', 'json', 'w', stock_symbols, 'TIME_SERIES_MONTHLY', utils.url_vantage, utils.headers_stocks)
+extract.Sector(tmp_indicator_path, 'sector', 'json', 'w', 'SECTOR', utils.url_vantage, utils.headers_indicators)
+extract.Indicator(tmp_indicator_path, 'unemployment', 'json', 'w', utils.unemployment_url, utils.headers_indicators)
+extract.Indicator(tmp_indicator_path, 'sentiment', 'json', 'w', utils.consumer_sentiment_url, utils.headers_indicators)
+extract.Indicator(tmp_indicator_path, 'inflation', 'json', 'w', utils.inflation_url, utils.headers_indicators)
+extract.Indicator(tmp_indicator_path, 'mortgage', 'json', 'w', utils.mortgage_url, utils.headers_indicators)
 
 
 # Clean Covid data
@@ -59,6 +59,7 @@ clean.NewYork(f'{tmp_county_path}/new-york.json', 'json', county_path)
 clean.Pennsylvania(f'{tmp_county_path}/pennsylvania.json', 'json', county_path)
 clean.Illinois(f'{tmp_county_path}/illinois.json', 'json', county_path)
 clean.Ohio(f'{tmp_county_path}/ohio.csv', 'csv', county_path)
-clean.Georgia(f'{tmp_county_path}/georgia.csv', 'csv', county_path)
+clean.Georgia(f'{tmp_county_path}/georgia.json', 'json', county_path)
 clean.Cases(f'{tmp_county_path}/cases.csv', 'csv', county_path)
 clean.Deaths(f'{tmp_county_path}/deaths.csv', 'csv', county_path)
+clean.Population(f'{tmp_county_path}/population.csv', 'csv', county_path)
