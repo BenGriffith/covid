@@ -38,57 +38,57 @@ class CovidData:
         # Output to console
         print('{}.{} file created for {}'.format(self.name, self.ext, type(self).__name__))
 
-class California(CovidData):
+# class California(CovidData):
 
-    def __init__(self, path, name, ext, mode):
-        super().__init__(path, name, ext, mode)
-        self.offset = 0
-        self.limit = 2000
-        self.counter = 1
-        self.data_ca = []
-        self.get_response()
-        self.create_file()
+#     def __init__(self, path, name, ext, mode):
+#         super().__init__(path, name, ext, mode)
+#         self.offset = 0
+#         self.limit = 2000
+#         self.counter = 1
+#         self.data_ca = []
+#         self.get_response()
+#         self.create_file()
 
-    def get_response(self):
+#     def get_response(self):
 
-        while True:
+#         while True:
 
-            # Submit API request
-            url = 'https://data.ca.gov/api/3/action/datastore_search?resource_id=1be1e43c-b4b2-4002-afb6-340bbcc85bbf&offset={}&limit={}'.format(self.offset, self.limit)
-            response = requests.get(url)
+#             # Submit API request
+#             url = 'https://data.ca.gov/api/3/action/datastore_search?resource_id=1be1e43c-b4b2-4002-afb6-340bbcc85bbf&offset={}&limit={}'.format(self.offset, self.limit)
+#             response = requests.get(url)
 
-            # Output to log
-            log.logging.info('Request-Response {} submitted for {} with status code of {}'.format(self.counter, type(self).__name__, response.status_code))
+#             # Output to log
+#             log.logging.info('Request-Response {} submitted for {} with status code of {}'.format(self.counter, type(self).__name__, response.status_code))
 
-            # Output to console
-            print('Request-Response {} submitted for {} with status code of {}'.format(self.counter, type(self).__name__, response.status_code))
+#             # Output to console
+#             print('Request-Response {} submitted for {} with status code of {}'.format(self.counter, type(self).__name__, response.status_code))
 
-            # If API response returns data add it to list
-            # If API response does not return any data break the loop construct
-            if response.json()['result']['records']:
+#             # If API response returns data add it to list
+#             # If API response does not return any data break the loop construct
+#             if response.json()['result']['records']:
                 
-                for row in response.json()['result']['records']:
-                    self.data_ca.append(row)
+#                 for row in response.json()['result']['records']:
+#                     self.data_ca.append(row)
                     
-            else:
-                break
+#             else:
+#                 break
             
-            # Increase offset for pagination purposes
-            self.offset += self.limit
-            self.counter += 1
+#             # Increase offset for pagination purposes
+#             self.offset += self.limit
+#             self.counter += 1
 
-            # Pause program before submitting next API request
-            time.sleep(10)
+#             # Pause program before submitting next API request
+#             time.sleep(10)
 
-    def create_file(self):
-        with open('{}/{}.{}'.format(self.path, self.name, self.ext), self.mode) as california_file:
-            json.dump(self.data_ca, california_file)
+#     def create_file(self):
+#         with open('{}/{}.{}'.format(self.path, self.name, self.ext), self.mode) as california_file:
+#             json.dump(self.data_ca, california_file)
 
-        # Output to log
-        log.logging.info('{}.{} file created for {}'.format(self.name, self.ext, type(self).__name__))
+#         # Output to log
+#         log.logging.info('{}.{} file created for {}'.format(self.name, self.ext, type(self).__name__))
 
-        # Output to console
-        print('{}.{} file created for {}'.format(self.name, self.ext, type(self).__name__))
+#         # Output to console
+#         print('{}.{} file created for {}'.format(self.name, self.ext, type(self).__name__))
 
 class Texas(CovidData):
 

@@ -65,24 +65,24 @@ class CleanAndStore:
         if len(self.df[self.df.duplicated()]) != 0:
             self.df.drop_duplicates()
 
-class California(CleanAndStore):
+# class California(CleanAndStore):
 
-    def __init__(self, load, load_type, save_path):
-        super().__init__(load, load_type, save_path)
-        super().upper_case()
-        super().drop_duplicates()
-        self.wrangle()
-        super().save_file('california', 'json')
+#     def __init__(self, load, load_type, save_path):
+#         super().__init__(load, load_type, save_path)
+#         super().upper_case()
+#         super().drop_duplicates()
+#         self.wrangle()
+#         super().save_file('california', 'json')
 
-    def wrangle(self):
+#     def wrangle(self):
 
-        # Drop records
-        self.df.drop(self.df[self.df.date.isnull()].index, inplace=True)
-        self.df.drop(self.df[self.df.area == "UNKNOWN"].index, inplace=True)
-        self.df.drop(self.df[self.df.area == "OUT OF STATE"].index, inplace=True)
+#         # Drop records
+#         self.df.drop(self.df[self.df.date.isnull()].index, inplace=True)
+#         self.df.drop(self.df[self.df.area == "UNKNOWN"].index, inplace=True)
+#         self.df.drop(self.df[self.df.area == "OUT OF STATE"].index, inplace=True)
 
-        # Convert type
-        self.df = self.df.astype({'date': 'datetime64[ms]'})
+#         # Convert type
+#         self.df = self.df.astype({'date': 'datetime64[ms]'})
 
 class Florida(CleanAndStore):
 

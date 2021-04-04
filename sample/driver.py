@@ -25,7 +25,7 @@ os.makedirs(indicator_path)
 
 
 # Extract Covid data
-extract.California(tmp_county_path, 'california', 'json', 'w')
+# extract.California(tmp_county_path, 'california', 'json', 'w')
 extract.Texas(tmp_county_path, 'texas', 'xlsx', 'wb', utils.texas_url)
 extract.Florida(tmp_county_path, 'florida', 'json', 'w')
 extract.NewYork(tmp_county_path, 'new-york', 'json', 'w')
@@ -52,7 +52,7 @@ extract.Indicator(tmp_indicator_path, 'mortgage', 'json', 'w', utils.mortgage_ur
 
 
 # Clean Covid data
-clean.California(f'{tmp_county_path}/california.json', 'json', county_path)
+# clean.California(f'{tmp_county_path}/california.json', 'json', county_path)
 clean.Texas(f'{tmp_county_path}/texas.xlsx', county_path)
 clean.Florida(f'{tmp_county_path}/florida.json', 'json', county_path)
 clean.NewYork(f'{tmp_county_path}/new-york.json', 'json', county_path)
