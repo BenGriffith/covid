@@ -4,15 +4,15 @@ import clean
 import utils
 
 # Temporary
-tmp_county_path = 'tmp/county'
-tmp_stock_path = 'tmp/financial/stocks'
-tmp_indicator_path = 'tmp/financial/indicators'
+tmp_county_path = 'tmp/initial/county'
+tmp_stock_path = 'tmp/initial/financial/stocks'
+tmp_indicator_path = 'tmp/initial/financial/indicators'
 
 
 # Permanent
-county_path = 'data/county'
-stock_path = 'data/financial/stocks'
-indicator_path = 'data/financial/indicators'
+county_path = 'data/initial/county'
+stock_path = 'data/initial/financial/stocks'
+indicator_path = 'data/initial/financial/indicators'
 
 
 # Directory creation
@@ -44,7 +44,6 @@ extract.FinancialData.create_directories(tmp_stock_path, stock_symbols)
 extract.StocksDaily(tmp_stock_path, 'daily', 'json', 'w', stock_symbols, 'TIME_SERIES_DAILY', utils.url_vantage, utils.headers_stocks)
 extract.StocksWeekly(tmp_stock_path, 'weekly', 'json', 'w', stock_symbols, 'TIME_SERIES_WEEKLY', utils.url_vantage, utils.headers_stocks)
 extract.StocksMonthly(tmp_stock_path, 'monthly', 'json', 'w', stock_symbols, 'TIME_SERIES_MONTHLY', utils.url_vantage, utils.headers_stocks)
-extract.Sector(tmp_indicator_path, 'sector', 'json', 'w', 'SECTOR', utils.url_vantage, utils.headers_indicators)
 extract.Indicator(tmp_indicator_path, 'unemployment', 'json', 'w', utils.unemployment_url, utils.headers_indicators)
 extract.Indicator(tmp_indicator_path, 'sentiment', 'json', 'w', utils.consumer_sentiment_url, utils.headers_indicators)
 extract.Indicator(tmp_indicator_path, 'inflation', 'json', 'w', utils.inflation_url, utils.headers_indicators)

@@ -512,39 +512,6 @@ class StocksMonthly(FinancialData):
             # Pause program before submitting next API request
             time.sleep(15)
 
-class Sector(FinancialData):
-
-    def __init__(self, path, name, ext, mode, function, url, headers_stocks):
-        super().__init__(path, name, ext, mode)
-        self.function = function
-        self.url = url
-        self.headers_stocks = headers_stocks
-        self.get_response()
-        self.create_file()
-
-    def get_response(self):
-        querystring = {"function": self.function}
-
-        # Submit API request
-        self.response = requests.get(self.url, headers=self.headers_stocks, params=querystring)
-
-        # Output to log
-        log.logging.info('Request-Response submitted for {} with status code of {}'.format(type(self).__name__, self.response.status_code))
-
-        # Output to console
-        print('Request-Response submitted for {} with status code of {}'.format(type(self).__name__, self.response.status_code))
-    
-    def create_file(self):
-        file = open('{}/{}.{}'.format(self.path, self.name, self.ext), self.mode)
-        file.write(self.response.text)
-        file.close()
-
-        # Output to log
-        log.logging.info('{}.{} file created for {}'.format(self.name, self.ext, type(self).__name__))
-
-        # Output to console
-        print('{}.{} file created for {}'.format(self.name, self.ext, type(self).__name__))
-
 class Indicator(FinancialData):
     
     def __init__(self, path, name, ext, mode, url, headers_indicators):
