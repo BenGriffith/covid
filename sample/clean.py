@@ -1,12 +1,19 @@
 import pandas as pd
 import numpy as np
-import json
+import pyspark
 import warnings
 import logging
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+from pyspark.sql.window import Window
+from pyspark.sql import SparkSession
 from datetime import datetime
 from logs import log
 
 warnings.filterwarnings('ignore')
+
+# Create Spark Session
+spark = SparkSession.builder.getOrCreate()
 
 class CleanAndStore:
 
@@ -19,7 +26,7 @@ class CleanAndStore:
         Load file from tmp storage
         """
         if load_type == 'csv':
-            self.df = pd.read_csv(load)
+            self.df = spark.read.format(load_type).option("header", True).load(load)
             
             # Output to log
             log.logging.info('{} file loaded for cleaning'.format(load))
@@ -28,7 +35,7 @@ class CleanAndStore:
             print('{} file loaded for cleaning'.format(load))
             return self.df
         elif load_type == 'json':
-            self.df = pd.read_json(load)
+            self.df = spark.read.format(load_type).load(load)
 
             # Output to log
             log.logging.info('{} file loaded for cleaning'.format(load))
@@ -47,61 +54,44 @@ class CleanAndStore:
         print('{} file loaded for cleaning'.format(load))
         return self.df
 
-    def save_file(self, name, ext):
-        self.df.to_json(f'{self.save_path}/{name}.{ext}', orient='records')
+    def save_file(self, option, name, ext):
+        self.df.write.format(ext).save(f'{self.save_path}/{option}/{name}')
 
         # Output to log
-        log.logging.info(f'Cleaning and File Creation for {type(self).__name__} complete: {self.df.shape[0]} records and {self.df.shape[1]} fields')
+        log.logging.info(f'Cleaning and File Creation for {type(self).__name__} complete: {self.df.count()} records and {len(self.df.columns)} fields')
 
         # Output to console
-        print(f'Cleaning and File Creation for {type(self).__name__} complete: {self.df.shape[0]} records and {self.df.shape[1]} fields')
-
-    def upper_case(self):
-        for row in self.df.columns:
-            if self.df[row].dtype == 'object':
-                self.df[row] = self.df[row].str.upper()
-
-    def drop_duplicates(self):
-        if len(self.df[self.df.duplicated()]) != 0:
-            self.df.drop_duplicates()
-
-# class California(CleanAndStore):
-
-#     def __init__(self, load, load_type, save_path):
-#         super().__init__(load, load_type, save_path)
-#         super().upper_case()
-#         super().drop_duplicates()
-#         self.wrangle()
-#         super().save_file('california', 'json')
-
-#     def wrangle(self):
-
-#         # Drop records
-#         self.df.drop(self.df[self.df.date.isnull()].index, inplace=True)
-#         self.df.drop(self.df[self.df.area == "UNKNOWN"].index, inplace=True)
-#         self.df.drop(self.df[self.df.area == "OUT OF STATE"].index, inplace=True)
-
-#         # Convert type
-#         self.df = self.df.astype({'date': 'datetime64[ms]'})
+        print(f'Cleaning and File Creation for {type(self).__name__} complete: {self.df.count()} records and {len(self.df.columns)} fields')
 
 class Florida(CleanAndStore):
 
     def __init__(self, load, load_type, save_path):
         super().__init__(load, load_type, save_path)
-        super().upper_case()
-        super().drop_duplicates()
         self.wrangle()
-        super().save_file('florida', 'json')
 
     def wrangle(self):
 
-        # Drop records
-        self.df.drop(['Case1', 'ChartDate', 'ObjectId'], axis=1, inplace=True)
-        self.df.drop(self.df[self.df.Gender == 'Unknown'].index, inplace=True)
+        self.df = self.df.select(col("Age").cast("int").alias("age"),
+                                when(col("Case_") == "Yes", 1).alias("case"),
+                                upper(col("Contact")).alias("contact"),
+                                upper(col("County")).alias("county"),
+                                upper(col("Died")).alias("died"),
+                                upper(col("EDvisit")).alias("ed_visit"),
+                                to_timestamp(from_unixtime(substring(col("EventDate").cast("string"), 1, 10))).alias("date"),
+                                upper(col("Gender")).alias("gender"),
+                                upper(col("Origin")).alias("origin")).orderBy("date")
 
-        # Convert type
-        self.df = self.df.astype({'EventDate': 'object'})
-        pd.to_datetime(self.df['EventDate'], unit='ms')
+        self.df = self.df.withColumn("state", lit("FL"))
+
+        self.df = self.df.filter(self.df.county != "UNKNOWN")
+
+        # Write preprocessed
+        super().save_file('preprocessed', 'florida', 'parquet')
+
+        df_fl_final = self.df.select("date", "county", "state", "case").groupBy("date", "county", "state").agg(count("case").cast("int").alias("new_cases")).orderBy("date", "county")
+
+        # Write final
+        super().save_file('final', 'florida', 'parquet')
 
 class Texas(CleanAndStore):
 
@@ -111,9 +101,6 @@ class Texas(CleanAndStore):
         self.set_column_names(load)
         super().load_excel(load, self.columns, 2)
         self.wrangle()
-        super().upper_case()
-        super().drop_duplicates()
-        super().save_file('texas', 'json')
 
     def set_column_names(self, load):
         """
@@ -169,110 +156,213 @@ class Texas(CleanAndStore):
             final_list.append(final_dict)
 
         self.df = pd.DataFrame(final_list)
+
+        self.df = spark.createDataFrame(self.df)
+
+        self.df = self.df.select("date", 
+                                upper(col("county")).alias("county"), 
+                                col("case_total").cast("int"))
+
+        self.df = self.df.withColumn("state", lit("TX"))
+
+        self.df = self.df.filter(self.df.county != "UNKNOWN")
+
+        windowSpec = Window.partitionBy("county").orderBy("date")
+
+        self.df = self.df.withColumn("previous_day", lag("case_total", 1).over(windowSpec))
+
+        self.df = self.df.withColumn("new_cases", (self.df.case_total - self.df.previous_day))
+
+        # Write preprocessed
+        super().save_file('preprocessed', 'texas', 'parquet')
+
+        df_tx_final = self.df.select("date", "county", "state", "new_cases")
+
+        # Write final
+        super().save_file('final', 'texas', 'parquet')
         
 
 class NewYork(CleanAndStore):
     
     def __init__(self, load, load_type, save_path):
         super().__init__(load, load_type, save_path)
-        super().upper_case()
-        super().drop_duplicates()
         self.wrangle()
-        super().save_file('new-york', 'json')
 
     def wrangle(self):
 
-        # Convert type
-        self.df = self.df.astype({'test_date': 'datetime64[ms]',
-                                  'new_positives': 'float',
-                                  'cumulative_number_of_positives': 'float',
-                                  'total_number_of_tests': 'float',
-                                  'cumulative_number_of_tests': 'float'})
+        self.df = self.df.select(upper(col("county")).alias("county"), 
+                                col("cumulative_number_of_positives").cast("int").alias("total_cases"),
+                                col("cumulative_number_of_tests").cast("int").alias("total_tests"),
+                                col("new_positives").cast("int").alias("new_cases"),
+                                to_timestamp(col("test_date")).alias("date"),
+                                col("total_number_of_tests").cast("int").alias("new_tests")).orderBy("test_date")
+
+        self.df = self.df.withColumn("state", lit("NY"))
+
+        self.df = self.df.filter("county != 'UNKNOWN'")
+
+        # Write preprocessed
+        super().save_file('preprocessed', 'new-york', 'parquet')
+
+        df_ny_final = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
+
+        # Write final
+        super().save_file('final', 'new-york', 'parquet')
 
 class Pennsylvania(CleanAndStore):
 
     def __init__(self, load, load_type, save_path):
         super().__init__(load, load_type, save_path)
-        super().upper_case()
-        super().drop_duplicates()
         self.wrangle()
-        super().save_file('pennsylvania', 'json')
 
     def wrangle(self):
 
-        # Drop records
-        self.df.drop(['georeferenced_lat__long', ':@computed_region_nmsq_hqvv', ':@computed_region_d3gw_znnf',
-            ':@computed_region_amqz_jbr4', ':@computed_region_r6rf_p9et', ':@computed_region_rayf_jjgk'], axis=1, inplace=True)
+        self.df = self.df.drop('georeferenced_lat__long', ':@computed_region_nmsq_hqvv', ':@computed_region_d3gw_znnf', ':@computed_region_amqz_jbr4', ':@computed_region_r6rf_p9et', ':@computed_region_rayf_jjgk')
 
-        # Convert type
-        self.df = self.df.astype({'date': 'datetime64[ms]',
-                                  'cases': 'float',
-                                  'cases_avg_new': 'float',
-                                  'cases_cume': 'float',
-                                  'population': 'float'})
+        self.df = self.df.select(col("cases").cast("int").alias("new_cases"), 
+                     col("cases_avg_new").cast("float").alias("cases_avg_new"), 
+                     col("cases_avg_new_rate").cast("float").alias("cases_avg_new_rate"), 
+                     col("cases_cume").cast("int").alias("cases_total"),
+                     col("cases_cume_rate").cast("float").alias("cases_total_rate"), 
+                     upper(col("county")).alias("county"), 
+                     col("latitude").cast("float").alias("latitude"), 
+                     col("longitude").cast("float").alias("longitude"), 
+                     col("population").cast("int").alias("population"), 
+                     to_timestamp(col("date")).alias("date")).orderBy("date")
+
+        self.df = self.df.withColumn("state", lit("PA"))
+
+        self.df = self.df.filter(self.df.county != "UNKNOWN")
+
+        # Write preprocessed
+        super().save_file('preprocessed', 'pennsylvania', 'parquet')
+
+        df_pa_final = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
+
+        # Write final
+        super().save_file('final', 'pennsylvania', 'parquet')
 
 class Illinois(CleanAndStore):
 
     def __init__(self, load, load_type, save_path):
         super().__init__(load, load_type, save_path)
-        super().upper_case()
-        super().drop_duplicates()
         self.wrangle()
-        super().save_file('illinois', 'json')
 
     def wrangle(self):
 
-        # Convert type
-        self.df = self.df.astype({'reportDate': 'datetime64[ms]',
-                                  'tested': 'float',
-                                  'confirmed_cases': 'float',
-                                  'deaths': 'float'})
+        self.df = self.df.select(upper(col("CountyName")).alias("county"),
+                                col("confirmed_cases").cast("int").alias("new_cases"),
+                                col("deaths").cast("int").alias("deaths"),
+                                col("latitude").cast("float").alias("latitude"),
+                                col("longitude").cast("float").alias("longitude"),
+                                to_timestamp(col("reportDate")).alias("date"),
+                                col("tested").cast("int").alias("tested")).orderBy("date")
+
+        self.df = self.df.withColumn("state", lit("IL"))
+
+        self.df = self.df.filter(self.df.county != "UNKNOWN")
+        
+        # Write preprocessed
+        super().save_file('preprocessed', 'illinois', 'parquet')
+
+        df_il_final = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
+
+        # Write final
+        super().save_file('final', 'illinois', 'parquet')
 
 class Ohio(CleanAndStore):
     
     def __init__(self, load, load_type, save_path):
         super().__init__(load, load_type, save_path)
-        super().upper_case()
-        super().drop_duplicates()
         self.wrangle()
-        super().save_file('ohio', 'json')
 
     def wrangle(self):
 
-        # Drop records
-        self.df.drop(self.df[self.df.County == 'UNKNOWN'].index, inplace=True)
-        self.df.drop(self.df[self.df.Sex.isnull()].index, inplace=True)
-        self.df.drop(self.df[self.df.Sex == 'UNKNOWN'].index, inplace=True)
-        self.df.drop(['Admission Date', 'Date Of Death'], axis=1, inplace=True)
-        self.df.drop(self.df[self.df.Sex.isnull()].index, inplace=True)
-        self.df.drop(self.df[self.df['Onset Date'].isnull()].index, inplace=True)
+        self.df = self.df.drop("Admission Date", "Date of Death")
 
-        # Change type
-        self.df = self.df.astype({'Onset Date': 'datetime64[ms]',
-                                  'Case Count': 'float',
-                                  'Hospitalized Count': 'float',
-                                  'Death Due To Illness Count - County Of Residence': 'float'})
+        self.df = self.df.select(upper(col("County")).alias("county"),
+                                upper(col("Sex")).alias("sex"),
+                                col("Age Range").alias("age"),
+                                to_timestamp(col("Onset Date")).alias("date"),
+                                col("Case Count").cast("int").alias("new_cases"),
+                                col("Hospitalized Count").cast("int").alias("hospitalized"),
+                                col("Death Due To Illness Count - County Of Residence").cast("int").alias("death")).filter("date IS NOT NULL").orderBy("date")
+
+        self.df = self.df.withColumn("state", lit("OH"))
+
+        self.df = self.df.filter("County != 'UNKNOWN'")
+
+        # Write preprocessed
+        super().save_file('preprocessed', 'ohio', 'parquet')
+
+        df_oh_final = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
+
+        # Write final
+        super().save_file('final', 'ohio', 'parquet')
 
 class Georgia(CleanAndStore):
 
     def __init__(self, load, load_type, save_path):
         super().__init__(load, load_type, save_path)
-        super().upper_case()
-        super().drop_duplicates()
         self.wrangle()
-        super().save_file('georgia', 'json')
 
     def wrangle(self):
 
-        # Drop records
-        self.df.drop(['OBJECTID', 'C_NEW_PERCT_CHG', 'D_NEW_PERCT_CHG', 'C_NEW_7D_MEAN', 'D_NEW_7D_MEAN', 'C_NEW_7D_PERCT_CHG', 'D_NEW_7D_PERCT_CHG', 'GlobalID'], axis=1, inplace=True)
-        self.df.drop(self.df[self.df.COUNTY == 'NON-GEORGIA RESIDENT'].index, inplace=True)
-        self.df.drop(self.df[self.df.COUNTY == 'UNKNOWN'].index, inplace=True)
+        self.df = self.df.drop('OBJECTID', 'C_NEW_PERCT_CHG', 'D_NEW_PERCT_CHG', 'C_NEW_7D_MEAN', 'D_NEW_7D_MEAN', 'C_NEW_7D_PERCT_CHG', 'D_NEW_7D_PERCT_CHG', 'GlobalID')
+        
+        self.df = self.df.filter("COUNTY != 'UNKNOWN'")
 
-        # Change type
-        self.df = self.df.astype({'DATESTAMP': 'datetime64[ms]', 'C_New': 'float', 'C_Cum': 'float', 'D_New': 'float', 'D_Cum': 'float', 'H_New': 'float', 'H_Cum': 'float', 'C_Rate': 'float', 'C_Female': 'float', 'C_Male': 'float', 'C_SexUnkn':'float', 'C_UCon_Yes': 'float', 'C_UCon_No': 'float', 'C_UCon_Unk': 'float', 'C_Age_0_4': 'float', 'C_Age_5_14': 'float', 'C_Age_15_24': 'float', 'C_Age_25_34': 'float', 'C_Age_35_44': 'float', 'C_Age_45_54': 'float', 'C_Age_55_64': 'float', 'C_Age_65_74': 'float',
-        'C_Age_75_84': 'float', 'C_Age_85plus': 'float', 'C_Age_Unkn': 'float', 'C_Age_0': 'float',
-        'C_Age_20': 'float', 'C_RaceWh': 'float', 'C_RaceBl': 'float', 'C_RaceAs': 'float', 'C_RaceOth': 'float', 'C_RaceUnk': 'float', 'C_His': 'float', 'C_NonHis': 'float', 'C_EthUnk': 'float'})
+        self.df = self.df.withColumn("date", to_timestamp("DATESTAMP"))
+        self.df = self.df.drop("DATESTAMP")
+
+        self.df = self.df.select(col("CNTY_FIPS").cast("int").alias("county_fips"),
+                                upper(col("COUNTY")).alias("county"),
+                                "date",
+                                col("C_Age_0").cast("int").alias("cases_age_0"),
+                                col("C_Age_0_4").cast("int").alias("cases_age_0_4"),
+                                col("C_Age_15_24").cast("int").alias("cases_age_15_24"),
+                                col("C_Age_20").cast("int").alias("cases_age_20"),
+                                col("C_Age_25_34").cast("int").alias("cases_age_25_34"),
+                                col("C_Age_35_44").cast("int").alias("cases_age_35_44"),
+                                col("C_Age_45_54").cast("int").alias("cases_age_45_54"),
+                                col("C_Age_55_64").cast("int").alias("cases_age_55_64"),
+                                col("C_Age_5_14").cast("int").alias("cases_age_5_14"),
+                                col("C_Age_65_74").cast("int").alias("cases_age_65_74"),
+                                col("C_Age_75_84").cast("int").alias("cases_age_75_84"),
+                                col("C_Age_85plus").cast("int").alias("cases_age_85plus"),
+                                col("C_Age_Unkn").cast("int").alias("cases_age_unknown"),
+                                col("C_Cum").cast("int").alias("cases_cumulative"),
+                                col("C_EthUnk").cast("int").alias("cases_ethnicity_unknown"),
+                                col("C_Female").cast("int").alias("cases_female"),
+                                col("C_His").cast("int").alias("cases_hispanic"),
+                                col("C_Male").cast("int").alias("cases_male"),
+                                col("C_New").cast("int").alias("new_cases"),
+                                col("C_NonHis").cast("int").alias("cases_nonhispanic"),
+                                col("C_RaceAs").cast("int").alias("cases_asian"),
+                                col("C_RaceBl").cast("int").alias("cases_black"),
+                                col("C_RaceOth").cast("int").alias("cases_other"),
+                                col("C_RaceUnk").cast("int").alias("cases_unknown"),
+                                col("C_RaceWh").cast("int").alias("cases_white"),
+                                col("C_SexUnkn").cast("int").alias("cases_sex_unknown"),
+                                col("C_UCon_No").cast("int").alias("cases_condition_no"),
+                                col("C_UCon_Unk").cast("int").alias("cases_condition_unknown"),
+                                col("C_UCon_Yes").cast("int").alias("cases_condition_yes"),
+                                col("D_Cum").cast("int").alias("deaths_cumulative"),
+                                col("D_New").cast("int").alias("deaths_new"),
+                                col("H_Cum").cast("int").alias("hospital_cumulative"),
+                                col("H_New").cast("int").alias("hospital_new")).orderBy("date")
+
+        self.df = self.df.withColumn("state", lit("GA"))
+
+        self.df = self.df.filter("county != 'UNKNOWN'")
+
+        # Write preprocessed
+        super().save_file('preprocessed', 'georgia', 'parquet')        
+
+        df_ga_final = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
+
+        # Write final
+        super().save_file('final', 'georgia', 'parquet')
 
 class Cases(CleanAndStore):
 
@@ -281,9 +371,20 @@ class Cases(CleanAndStore):
         self.columns = []
         self.set_column_names()
         self.wrangle()
-        super().upper_case()
-        super().drop_duplicates()
-        super().save_file('cases', 'json')
+
+    def load_file(self, load, load_type):
+        """
+        Load file from tmp storage
+        """
+        self.df = pd.read_csv(load)
+            
+        # Output to log
+        log.logging.info('{} file loaded for cleaning'.format(load))
+
+        # Output to console
+        print('{} file loaded for cleaning'.format(load))
+
+        return self.df   
 
     def set_column_names(self):
         """
@@ -337,7 +438,7 @@ class Cases(CleanAndStore):
         for row in records:
             final_dict = {}
             final_dict['countyFIPS'] = row[0]
-            final_dict['County Name'] = row[1]
+            final_dict['CountyName'] = row[1]
             final_dict['State'] = row[2]
             final_dict['StateFIPS'] = row[3]
             final_dict['Date'] = row[4]
@@ -346,6 +447,21 @@ class Cases(CleanAndStore):
 
         self.df = pd.DataFrame(final_list)
 
+        self.df = spark.createDataFrame(self.df)
+
+        # Write preprocessed
+        super().save_file('preprocessed', 'cases', 'parquet')
+
+        self.df = self.df.select(col("countyFIPS").cast("int").alias("county_fips"),
+                                upper(col("CountyName")).alias("county"),
+                                col("State").alias("state"),
+                                col("StateFIPS").cast("int").alias("state_fips"),
+                                col("Date").alias("date"),
+                                col("Cases").cast("int").alias("cases")).filter("state NOT IN ('FL', 'TX', 'NY', 'PA', 'IL', 'OH', 'GA')").orderBy("date")
+
+        # Write final
+        super().save_file('final', 'cases', 'parquet')
+
 class Deaths(CleanAndStore):
 
     def __init__(self, load, load_type, save_path):
@@ -353,9 +469,20 @@ class Deaths(CleanAndStore):
         self.columns = []
         self.set_column_names()
         self.wrangle()
-        super().upper_case()
-        super().drop_duplicates()
-        super().save_file('deaths', 'json')
+
+    def load_file(self, load, load_type):
+        """
+        Load file from tmp storage
+        """
+        self.df = pd.read_csv(load)
+            
+        # Output to log
+        log.logging.info('{} file loaded for cleaning'.format(load))
+
+        # Output to console
+        print('{} file loaded for cleaning'.format(load))
+
+        return self.df   
 
     def set_column_names(self):
         """
@@ -409,7 +536,7 @@ class Deaths(CleanAndStore):
         for row in records:
             final_dict = {}
             final_dict['countyFIPS'] = row[0]
-            final_dict['County Name'] = row[1]
+            final_dict['CountyName'] = row[1]
             final_dict['State'] = row[2]
             final_dict['StateFIPS'] = row[3]
             final_dict['Date'] = row[4]
@@ -418,10 +545,30 @@ class Deaths(CleanAndStore):
 
         self.df = pd.DataFrame(final_list)
 
+        self.df = spark.createDataFrame(self.df)
+
+        # Write preprocessed
+        super().save_file('preprocessed', 'deaths', 'parquet')
+
+        self.df = self.df.select(col("countyFIPS").cast("int").alias("county_fips"),
+                                upper(col("CountyName")).alias("county"),
+                                col("State").alias("state"),
+                                col("StateFIPS").cast("int").alias("state_fips"),
+                                col("Date").alias("date"),
+                                col("Deaths").cast("int").alias("deaths")).orderBy("date")
+
+        # Write final
+        super().save_file('final', 'deaths', 'parquet')
+
 class Population(CleanAndStore):
 
     def __init__(self, load, load_type, save_path):
         super().__init__(load, load_type, save_path)
-        super().upper_case()
-        super().drop_duplicates()
-        super().save_file('population', 'json')
+
+        self.df = self.df.select(col("countyFIPS").cast("int").alias("county_fips"),
+                                upper(col("County Name")).alias("county"),
+                                "state",
+                                col("population").cast("int").alias("population"))
+
+        # Write final
+        super().save_file('final', 'population', 'parquet')
