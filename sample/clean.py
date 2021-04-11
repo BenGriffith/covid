@@ -9,6 +9,7 @@ from pyspark.sql.window import Window
 from pyspark.sql import SparkSession
 from datetime import datetime
 from logs import log
+from pathlib import Path
 
 warnings.filterwarnings('ignore')
 
@@ -31,17 +32,14 @@ class CleanAndStore:
             # Output to log
             log.logging.info('{} file loaded for cleaning'.format(load))
 
-            # Output to console
-            print('{} file loaded for cleaning'.format(load))
             return self.df
+
         elif load_type == 'json':
             self.df = spark.read.format(load_type).load(load)
 
             # Output to log
             log.logging.info('{} file loaded for cleaning'.format(load))
 
-            # Output to console
-            print('{} file loaded for cleaning'.format(load))
             return self.df
 
     def load_excel(self, load, columns, rows):
@@ -50,8 +48,6 @@ class CleanAndStore:
         # Output to log
         log.logging.info('{} file loaded for cleaning'.format(load))
 
-        # Output to console
-        print('{} file loaded for cleaning'.format(load))
         return self.df
 
     def save_file(self, option, name, ext):
@@ -60,13 +56,12 @@ class CleanAndStore:
         # Output to log
         log.logging.info(f'Cleaning and File Creation for {type(self).__name__} complete: {self.df.count()} records and {len(self.df.columns)} fields')
 
-        # Output to console
-        print(f'Cleaning and File Creation for {type(self).__name__} complete: {self.df.count()} records and {len(self.df.columns)} fields')
 
 class Florida(CleanAndStore):
 
     def __init__(self, load, load_type, save_path):
         super().__init__(load, load_type, save_path)
+        self.year = load[-9:-5]
         self.wrangle()
 
     def wrangle(self):
@@ -77,21 +72,21 @@ class Florida(CleanAndStore):
                                 upper(col("County")).alias("county"),
                                 upper(col("Died")).alias("died"),
                                 upper(col("EDvisit")).alias("ed_visit"),
-                                to_timestamp(from_unixtime(substring(col("EventDate").cast("string"), 1, 10))).alias("date"),
+                                to_date(to_timestamp(from_unixtime(substring(col("EventDate").cast("string"), 1, 10)))).alias("date"),
                                 upper(col("Gender")).alias("gender"),
-                                upper(col("Origin")).alias("origin")).orderBy("date")
+                                upper(col("Origin")).alias("origin")).distinct().orderBy("date")
 
         self.df = self.df.withColumn("state", lit("FL"))
 
         self.df = self.df.filter(self.df.county != "UNKNOWN")
 
         # Write preprocessed
-        super().save_file('preprocessed', 'florida', 'parquet')
+        super().save_file('preprocessed', f'florida-{self.year}', 'json')
 
-        df_fl_final = self.df.select("date", "county", "state", "case").groupBy("date", "county", "state").agg(count("case").cast("int").alias("new_cases")).orderBy("date", "county")
+        self.df = self.df.select("date", "county", "state", "case").groupBy("date", "county", "state").agg(count("case").cast("int").alias("new_cases")).orderBy("date", "county")
 
         # Write final
-        super().save_file('final', 'florida', 'parquet')
+        super().save_file('final', f'florida-{self.year}', 'json')
 
 class Texas(CleanAndStore):
 
@@ -159,9 +154,9 @@ class Texas(CleanAndStore):
 
         self.df = spark.createDataFrame(self.df)
 
-        self.df = self.df.select("date", 
+        self.df = self.df.select(to_date("date").alias("date"), 
                                 upper(col("county")).alias("county"), 
-                                col("case_total").cast("int"))
+                                col("case_total").cast("int")).distinct()
 
         self.df = self.df.withColumn("state", lit("TX"))
 
@@ -174,12 +169,12 @@ class Texas(CleanAndStore):
         self.df = self.df.withColumn("new_cases", (self.df.case_total - self.df.previous_day))
 
         # Write preprocessed
-        super().save_file('preprocessed', 'texas', 'parquet')
+        super().save_file('preprocessed', 'texas', 'json')
 
-        df_tx_final = self.df.select("date", "county", "state", "new_cases")
+        self.df = self.df.select("date", "county", "state", "new_cases")
 
         # Write final
-        super().save_file('final', 'texas', 'parquet')
+        super().save_file('final', 'texas', 'json')
         
 
 class NewYork(CleanAndStore):
@@ -194,20 +189,20 @@ class NewYork(CleanAndStore):
                                 col("cumulative_number_of_positives").cast("int").alias("total_cases"),
                                 col("cumulative_number_of_tests").cast("int").alias("total_tests"),
                                 col("new_positives").cast("int").alias("new_cases"),
-                                to_timestamp(col("test_date")).alias("date"),
-                                col("total_number_of_tests").cast("int").alias("new_tests")).orderBy("test_date")
+                                to_date(to_timestamp(col("test_date"))).alias("date"),
+                                col("total_number_of_tests").cast("int").alias("new_tests")).distinct().orderBy("test_date")
 
         self.df = self.df.withColumn("state", lit("NY"))
 
         self.df = self.df.filter("county != 'UNKNOWN'")
 
         # Write preprocessed
-        super().save_file('preprocessed', 'new-york', 'parquet')
+        super().save_file('preprocessed', 'new-york', 'json')
 
-        df_ny_final = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
+        self.df = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
 
         # Write final
-        super().save_file('final', 'new-york', 'parquet')
+        super().save_file('final', 'new-york', 'json')
 
 class Pennsylvania(CleanAndStore):
 
@@ -228,19 +223,19 @@ class Pennsylvania(CleanAndStore):
                      col("latitude").cast("float").alias("latitude"), 
                      col("longitude").cast("float").alias("longitude"), 
                      col("population").cast("int").alias("population"), 
-                     to_timestamp(col("date")).alias("date")).orderBy("date")
+                     to_date(to_timestamp(col("date"))).alias("date")).distinct()
 
         self.df = self.df.withColumn("state", lit("PA"))
 
         self.df = self.df.filter(self.df.county != "UNKNOWN")
 
         # Write preprocessed
-        super().save_file('preprocessed', 'pennsylvania', 'parquet')
+        super().save_file('preprocessed', 'pennsylvania', 'json')
 
-        df_pa_final = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
+        self.df = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
 
         # Write final
-        super().save_file('final', 'pennsylvania', 'parquet')
+        super().save_file('final', 'pennsylvania', 'json')
 
 class Illinois(CleanAndStore):
 
@@ -251,24 +246,30 @@ class Illinois(CleanAndStore):
     def wrangle(self):
 
         self.df = self.df.select(upper(col("CountyName")).alias("county"),
-                                col("confirmed_cases").cast("int").alias("new_cases"),
+                                col("confirmed_cases").cast("int").alias("case_total"),
                                 col("deaths").cast("int").alias("deaths"),
                                 col("latitude").cast("float").alias("latitude"),
                                 col("longitude").cast("float").alias("longitude"),
-                                to_timestamp(col("reportDate")).alias("date"),
-                                col("tested").cast("int").alias("tested")).orderBy("date")
+                                to_date(to_timestamp(col("reportDate"))).alias("date"),
+                                col("tested").cast("int").alias("tested")).distinct().orderBy("date")
 
         self.df = self.df.withColumn("state", lit("IL"))
 
         self.df = self.df.filter(self.df.county != "UNKNOWN")
+
+        windowSpec = Window.partitionBy("county").orderBy("date")
+
+        self.df = self.df.withColumn("previous_day", lag("case_total", 1).over(windowSpec))
+
+        self.df = self.df.withColumn("new_cases", (self.df.case_total - self.df.previous_day))
         
         # Write preprocessed
-        super().save_file('preprocessed', 'illinois', 'parquet')
+        super().save_file('preprocessed', 'illinois', 'json')
 
-        df_il_final = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
+        self.df = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
 
         # Write final
-        super().save_file('final', 'illinois', 'parquet')
+        super().save_file('final', 'illinois', 'json')
 
 class Ohio(CleanAndStore):
     
@@ -283,22 +284,22 @@ class Ohio(CleanAndStore):
         self.df = self.df.select(upper(col("County")).alias("county"),
                                 upper(col("Sex")).alias("sex"),
                                 col("Age Range").alias("age"),
-                                to_timestamp(col("Onset Date")).alias("date"),
-                                col("Case Count").cast("int").alias("new_cases"),
+                                to_date(to_timestamp(col("Onset Date"))).alias("date"),
+                                col("Case Count").cast("int").alias("case"),
                                 col("Hospitalized Count").cast("int").alias("hospitalized"),
-                                col("Death Due To Illness Count - County Of Residence").cast("int").alias("death")).filter("date IS NOT NULL").orderBy("date")
+                                col("Death Due To Illness Count - County Of Residence").cast("int").alias("death")).filter("date IS NOT NULL").distinct().orderBy("date")
 
         self.df = self.df.withColumn("state", lit("OH"))
 
         self.df = self.df.filter("County != 'UNKNOWN'")
 
         # Write preprocessed
-        super().save_file('preprocessed', 'ohio', 'parquet')
+        super().save_file('preprocessed', 'ohio', 'json')
 
-        df_oh_final = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
+        self.df = self.df.select("date", "county", "state", "case").groupBy("date", "county", "state").agg(count("case").cast("int").alias("new_cases")).orderBy("date", "county")
 
         # Write final
-        super().save_file('final', 'ohio', 'parquet')
+        super().save_file('final', 'ohio', 'json')
 
 class Georgia(CleanAndStore):
 
@@ -312,12 +313,12 @@ class Georgia(CleanAndStore):
         
         self.df = self.df.filter("COUNTY != 'UNKNOWN'")
 
-        self.df = self.df.withColumn("date", to_timestamp("DATESTAMP"))
+        self.df = self.df.withColumn("date", col("DATESTAMP").cast("string"))
         self.df = self.df.drop("DATESTAMP")
 
         self.df = self.df.select(col("CNTY_FIPS").cast("int").alias("county_fips"),
                                 upper(col("COUNTY")).alias("county"),
-                                "date",
+                                to_date(from_unixtime(col("date")[1:10])).alias("date"),
                                 col("C_Age_0").cast("int").alias("cases_age_0"),
                                 col("C_Age_0_4").cast("int").alias("cases_age_0_4"),
                                 col("C_Age_15_24").cast("int").alias("cases_age_15_24"),
@@ -350,19 +351,19 @@ class Georgia(CleanAndStore):
                                 col("D_Cum").cast("int").alias("deaths_cumulative"),
                                 col("D_New").cast("int").alias("deaths_new"),
                                 col("H_Cum").cast("int").alias("hospital_cumulative"),
-                                col("H_New").cast("int").alias("hospital_new")).orderBy("date")
+                                col("H_New").cast("int").alias("hospital_new")).distinct().orderBy("date")
 
         self.df = self.df.withColumn("state", lit("GA"))
 
         self.df = self.df.filter("county != 'UNKNOWN'")
 
         # Write preprocessed
-        super().save_file('preprocessed', 'georgia', 'parquet')        
+        super().save_file('preprocessed', 'georgia', 'json')        
 
-        df_ga_final = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
+        self.df = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
 
         # Write final
-        super().save_file('final', 'georgia', 'parquet')
+        super().save_file('final', 'georgia', 'json')
 
 class Cases(CleanAndStore):
 
@@ -380,9 +381,6 @@ class Cases(CleanAndStore):
             
         # Output to log
         log.logging.info('{} file loaded for cleaning'.format(load))
-
-        # Output to console
-        print('{} file loaded for cleaning'.format(load))
 
         return self.df   
 
@@ -449,18 +447,26 @@ class Cases(CleanAndStore):
 
         self.df = spark.createDataFrame(self.df)
 
-        # Write preprocessed
-        super().save_file('preprocessed', 'cases', 'parquet')
-
         self.df = self.df.select(col("countyFIPS").cast("int").alias("county_fips"),
                                 upper(col("CountyName")).alias("county"),
                                 col("State").alias("state"),
                                 col("StateFIPS").cast("int").alias("state_fips"),
-                                col("Date").alias("date"),
-                                col("Cases").cast("int").alias("cases")).filter("state NOT IN ('FL', 'TX', 'NY', 'PA', 'IL', 'OH', 'GA')").orderBy("date")
+                                to_date(col("Date")).alias("date"),
+                                col("Cases").cast("int").alias("case_total")).filter("state NOT IN ('FL', 'TX', 'NY', 'PA', 'IL', 'OH', 'GA')").distinct()
+
+        # Write preprocessed
+        super().save_file('preprocessed', 'cases', 'json')  
+
+        windowSpec = Window.partitionBy("county", "state").orderBy("date")
+
+        self.df = self.df.withColumn("previous_day", lag("case_total", 1).over(windowSpec))
+
+        self.df = self.df.withColumn("new_cases", (self.df.case_total - self.df.previous_day))    
+
+        self.df = self.df.select("date", "county", "state", "new_cases")                  
 
         # Write final
-        super().save_file('final', 'cases', 'parquet')
+        super().save_file('final', 'cases', 'json')
 
 class Deaths(CleanAndStore):
 
@@ -478,9 +484,6 @@ class Deaths(CleanAndStore):
             
         # Output to log
         log.logging.info('{} file loaded for cleaning'.format(load))
-
-        # Output to console
-        print('{} file loaded for cleaning'.format(load))
 
         return self.df   
 
@@ -547,18 +550,26 @@ class Deaths(CleanAndStore):
 
         self.df = spark.createDataFrame(self.df)
 
-        # Write preprocessed
-        super().save_file('preprocessed', 'deaths', 'parquet')
-
         self.df = self.df.select(col("countyFIPS").cast("int").alias("county_fips"),
                                 upper(col("CountyName")).alias("county"),
                                 col("State").alias("state"),
                                 col("StateFIPS").cast("int").alias("state_fips"),
-                                col("Date").alias("date"),
-                                col("Deaths").cast("int").alias("deaths")).orderBy("date")
+                                to_date(col("Date")).alias("date"),
+                                col("Deaths").cast("int").alias("death_total")).distinct()
+
+        # Write preprocessed
+        super().save_file('preprocessed', 'deaths', 'json')   
+
+        windowSpec = Window.partitionBy("county", "state").orderBy("date")
+
+        self.df = self.df.withColumn("previous_day", lag("death_total", 1).over(windowSpec))
+
+        self.df = self.df.withColumn("new_deaths", (self.df.death_total - self.df.previous_day))         
+
+        self.df = self.df.select("date", "county", "state", "new_deaths")
 
         # Write final
-        super().save_file('final', 'deaths', 'parquet')
+        super().save_file('final', 'deaths', 'json')
 
 class Population(CleanAndStore):
 
@@ -568,7 +579,62 @@ class Population(CleanAndStore):
         self.df = self.df.select(col("countyFIPS").cast("int").alias("county_fips"),
                                 upper(col("County Name")).alias("county"),
                                 "state",
-                                col("population").cast("int").alias("population"))
+                                col("population").cast("int").alias("population")).distinct()
 
         # Write final
-        super().save_file('final', 'population', 'parquet')
+        super().save_file('final', 'population', 'json')
+
+class Stocks:
+
+    def __init__(self, load, save_path):
+        self.columns = ['date', 'open', 'high', 'low', 'close', 'volume']
+        self.wrangle(load, save_path)
+
+    def wrangle(self, load, save_path):
+
+        for stock in Path(load).glob('*/*.json'):
+
+            self.df = pd.read_json(stock, orient='index')
+
+            self.df.reset_index(inplace=True)
+
+            self.df = spark.createDataFrame(self.df, self.columns)
+
+            self.df = self.df.select(to_date("date").alias("date"), 
+                                    col("open").cast("float").alias("open"),
+                                    col("high").cast("float").alias("high"),
+                                    col("low").cast("float").alias("low"),
+                                    col("close").cast("float").alias("close"),
+                                    col("volume").cast("float").alias("volume")).orderBy("date")
+
+            # Write final
+            self.df.write.format('json').save(f'{save_path}/{stock.parent.name}/final/{stock.stem}')
+
+class Indicator(CleanAndStore):
+
+    def __init__(self, load, load_type, save_path, indicator):
+        super().__init__(load, load_type, save_path)
+        self.indicator = indicator
+        self.wrangle()
+
+    def load_file(self, load, load_type):
+        """
+        Load file from tmp storage
+        """
+        self.df = pd.read_json(load)
+            
+        # Output to log
+        log.logging.info('{} file loaded for cleaning'.format(load))
+
+        return self.df 
+
+    def wrangle(self):
+
+        self.df.reset_index(inplace=True)
+
+        self.df = spark.createDataFrame(self.df, ["date", self.indicator])
+
+        self.df = self.df.select(to_date("date").alias("date"), col(self.indicator).cast("float").alias(self.indicator)).orderBy("date")
+
+        # Write final
+        super().save_file('final', self.indicator, 'json')
