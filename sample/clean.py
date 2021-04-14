@@ -13,9 +13,6 @@ from pathlib import Path
 
 warnings.filterwarnings('ignore')
 
-# Create Spark Session
-spark = SparkSession.builder.getOrCreate()
-
 class CleanAndStore:
 
     def __init__(self, load, load_type, save_path):
@@ -81,12 +78,12 @@ class Florida(CleanAndStore):
         self.df = self.df.filter(self.df.county != "UNKNOWN")
 
         # Write preprocessed
-        super().save_file('preprocessed', f'florida-{self.year}', 'json')
+        super().save_file('preprocessed', f'florida-{self.year}', 'parquet')
 
         self.df = self.df.select("date", "county", "state", "case").groupBy("date", "county", "state").agg(count("case").cast("int").alias("new_cases")).orderBy("date", "county")
 
         # Write final
-        super().save_file('final', f'florida-{self.year}', 'json')
+        super().save_file('final', f'florida-{self.year}', 'parquet')
 
 class Texas(CleanAndStore):
 
@@ -169,12 +166,12 @@ class Texas(CleanAndStore):
         self.df = self.df.withColumn("new_cases", (self.df.case_total - self.df.previous_day))
 
         # Write preprocessed
-        super().save_file('preprocessed', 'texas', 'json')
+        super().save_file('preprocessed', 'texas', 'parquet')
 
         self.df = self.df.select("date", "county", "state", "new_cases")
 
         # Write final
-        super().save_file('final', 'texas', 'json')
+        super().save_file('final', 'texas', 'parquet')
         
 
 class NewYork(CleanAndStore):
@@ -197,12 +194,12 @@ class NewYork(CleanAndStore):
         self.df = self.df.filter("county != 'UNKNOWN'")
 
         # Write preprocessed
-        super().save_file('preprocessed', 'new-york', 'json')
+        super().save_file('preprocessed', 'new-york', 'parquet')
 
         self.df = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
 
         # Write final
-        super().save_file('final', 'new-york', 'json')
+        super().save_file('final', 'new-york', 'parquet')
 
 class Pennsylvania(CleanAndStore):
 
@@ -230,12 +227,12 @@ class Pennsylvania(CleanAndStore):
         self.df = self.df.filter(self.df.county != "UNKNOWN")
 
         # Write preprocessed
-        super().save_file('preprocessed', 'pennsylvania', 'json')
+        super().save_file('preprocessed', 'pennsylvania', 'parquet')
 
         self.df = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
 
         # Write final
-        super().save_file('final', 'pennsylvania', 'json')
+        super().save_file('final', 'pennsylvania', 'parquet')
 
 class Illinois(CleanAndStore):
 
@@ -264,12 +261,12 @@ class Illinois(CleanAndStore):
         self.df = self.df.withColumn("new_cases", (self.df.case_total - self.df.previous_day))
         
         # Write preprocessed
-        super().save_file('preprocessed', 'illinois', 'json')
+        super().save_file('preprocessed', 'illinois', 'parquet')
 
         self.df = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
 
         # Write final
-        super().save_file('final', 'illinois', 'json')
+        super().save_file('final', 'illinois', 'parquet')
 
 class Ohio(CleanAndStore):
     
@@ -294,12 +291,12 @@ class Ohio(CleanAndStore):
         self.df = self.df.filter("County != 'UNKNOWN'")
 
         # Write preprocessed
-        super().save_file('preprocessed', 'ohio', 'json')
+        super().save_file('preprocessed', 'ohio', 'parquet')
 
         self.df = self.df.select("date", "county", "state", "case").groupBy("date", "county", "state").agg(count("case").cast("int").alias("new_cases")).orderBy("date", "county")
 
         # Write final
-        super().save_file('final', 'ohio', 'json')
+        super().save_file('final', 'ohio', 'parquet')
 
 class Georgia(CleanAndStore):
 
@@ -358,12 +355,12 @@ class Georgia(CleanAndStore):
         self.df = self.df.filter("county != 'UNKNOWN'")
 
         # Write preprocessed
-        super().save_file('preprocessed', 'georgia', 'json')        
+        super().save_file('preprocessed', 'georgia', 'parquet')        
 
         self.df = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
 
         # Write final
-        super().save_file('final', 'georgia', 'json')
+        super().save_file('final', 'georgia', 'parquet')
 
 class Cases(CleanAndStore):
 
@@ -455,7 +452,7 @@ class Cases(CleanAndStore):
                                 col("Cases").cast("int").alias("case_total")).filter("state NOT IN ('FL', 'TX', 'NY', 'PA', 'IL', 'OH', 'GA')").distinct()
 
         # Write preprocessed
-        super().save_file('preprocessed', 'cases', 'json')  
+        super().save_file('preprocessed', 'cases', 'parquet')  
 
         windowSpec = Window.partitionBy("county", "state").orderBy("date")
 
@@ -466,7 +463,7 @@ class Cases(CleanAndStore):
         self.df = self.df.select("date", "county", "state", "new_cases")                  
 
         # Write final
-        super().save_file('final', 'cases', 'json')
+        super().save_file('final', 'cases', 'parquet')
 
 class Deaths(CleanAndStore):
 
@@ -558,7 +555,7 @@ class Deaths(CleanAndStore):
                                 col("Deaths").cast("int").alias("death_total")).distinct()
 
         # Write preprocessed
-        super().save_file('preprocessed', 'deaths', 'json')   
+        super().save_file('preprocessed', 'deaths', 'parquet')   
 
         windowSpec = Window.partitionBy("county", "state").orderBy("date")
 
@@ -569,7 +566,7 @@ class Deaths(CleanAndStore):
         self.df = self.df.select("date", "county", "state", "new_deaths")
 
         # Write final
-        super().save_file('final', 'deaths', 'json')
+        super().save_file('final', 'deaths', 'parquet')
 
 class Population(CleanAndStore):
 
@@ -582,7 +579,7 @@ class Population(CleanAndStore):
                                 col("population").cast("int").alias("population")).distinct()
 
         # Write final
-        super().save_file('final', 'population', 'json')
+        super().save_file('final', 'population', 'parquet')
 
 class Stocks:
 
@@ -608,7 +605,7 @@ class Stocks:
                                     col("volume").cast("float").alias("volume")).orderBy("date")
 
             # Write final
-            self.df.write.format('json').save(f'{save_path}/{stock.parent.name}/final/{stock.stem}')
+            self.df.write.format('parquet').save(f'{save_path}/{stock.parent.name}/final/{stock.stem}')
 
 class Indicator(CleanAndStore):
 
@@ -637,4 +634,4 @@ class Indicator(CleanAndStore):
         self.df = self.df.select(to_date("date").alias("date"), col(self.indicator).cast("float").alias(self.indicator)).orderBy("date")
 
         # Write final
-        super().save_file('final', self.indicator, 'json')
+        super().save_file('final', self.indicator, 'parquet')
