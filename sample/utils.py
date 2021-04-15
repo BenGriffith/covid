@@ -1,3 +1,13 @@
+# Temporary
+tmp_county_path = 'tmp/initial/county'
+tmp_stock_path = 'tmp/initial/financial/stocks'
+tmp_indicator_path = 'tmp/initial/financial/indicators'
+
+# Permanent
+county_path = 'data/initial/county'
+stock_path = 'data/initial/financial/stocks'
+indicator_path = 'data/initial/financial/indicators'
+
 # Covid URLs
 texas_url = 'https://dshs.texas.gov/coronavirus/TexasCOVID19DailyCountyCaseCountData.xlsx'
 ohio_url = 'https://coronavirus.ohio.gov/static/dashboards/COVIDDeathData_CountyOfResidence.csv'
@@ -13,3 +23,8 @@ inflation_url = 'https://u-s-economic-indicators.p.rapidapi.com/api/v1/resources
 mortgage_url = 'https://u-s-economic-indicators.p.rapidapi.com/api/v1/resources/mortgage-rate-30Y-fixed-monthly'
 
 # Stock APIs keys
+
+# Azure Details
+connection_string = "somevalue"
+storage_account = "somevalue"
+container_name = "somevalue"
