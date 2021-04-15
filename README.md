@@ -14,10 +14,10 @@ I then went through the process of updating my data pipeline to use PySpark so t
 
 - Extract Covid Case data and S&P 500 stock market data from 18 different sources
 - Temporarily store created file before uploading to Azure Blob Storage
-- Use PySpark to:
-  - Read from Azure Blob Storage
-  - Perform data cleaning and processing
-  - Write clean data to Azure Blob Storage in Parquet format
+- Created Spark Cluster
+- Read from Azure Blob Storage
+- Perform data cleaning and processing
+- Write clean data to Azure Blob Storage in Parquet format
 
 ## Technologies
 Project is created with: 
