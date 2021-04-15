@@ -56,7 +56,7 @@ class Florida(CovidData):
     def __init__(self, path, name, ext, mode):
         super().__init__(path, name, ext, mode)
         self.offset = 0
-        self.limit = 10000
+        self.limit = 2000
         self.counter = 1
         self.data_fl = []
         self.get_response()
@@ -65,7 +65,7 @@ class Florida(CovidData):
 
     def get_response(self):
 
-        for i in range(2): #while True:
+        while True:
 
             url = 'https://services1.arcgis.com/CY1LXxl9zlJeBuRZ/arcgis/rest/services/Case_Data_{}/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&resultOffset={}&resultRecordCount={}&f=json'.format(self.name[-4:], self.offset, self.limit)
             response = requests.get(url)
@@ -75,12 +75,13 @@ class Florida(CovidData):
 
             # If API response returns data add it to list
             # If API response does not return any data break the loop construct
-            if response.text.strip() != '[]':
+            if response.json()['features']:
                 
                 current_response_data = [feature['attributes'] for feature in response.json()['features']]
                 
                 for row in current_response_data:
                     self.data_fl.append(row)
+
             else:
                 break
             
@@ -89,7 +90,7 @@ class Florida(CovidData):
             self.counter += 1
 
             # Pause program before submitting next API request
-            time.sleep(15)
+            time.sleep(5)
 
     def create_file(self):
         with open('{}/{}.{}'.format(self.path, self.name, self.ext), self.mode) as florida_file:
@@ -112,7 +113,7 @@ class NewYork(CovidData):
 
     def get_response(self):
 
-        for i in range(2): #while True:
+        while True:
 
             # Submit API request
             url = 'https://health.data.ny.gov/resource/xdss-u53e.json?$limit={}&$offset={}'.format(self.limit, self.offset)
@@ -156,7 +157,8 @@ class Pennsylvania(CovidData):
         super().upload_blob()
 
     def get_response(self):
-        for i in range(2): #while True:
+        
+        while True:
 
             # Submit API request
             url = 'https://data.pa.gov/resource/j72v-r42c.json?$limit={}&$offset={}'.format(self.limit, self.offset)
@@ -210,7 +212,7 @@ class Illinois(CovidData):
 
         counties = [county.split(' ')[0] for county in counties]
 
-        for index, county in enumerate(counties[:5], start=1):
+        for index, county in enumerate(counties, start=1):
 
             # Submit API request
             url = 'https://idph.illinois.gov/DPHPublicInformation/api/COVID/GetCountyHistorical?countyName={}'.format(county)
@@ -254,7 +256,7 @@ class Georgia(CovidData):
 
     def get_response(self):
 
-        for i in range(4): #while True:
+        while True:
 
             # Submit API request
             url = 'https://services7.arcgis.com/Za9Nk6CPIPbvR1t7/arcgis/rest/services/Georgia_PUI_Data_Download/FeatureServer/0/query?outFields=*&where=1%3D1&resultOffset={}&resultRecordCount={}&f=json'.format(self.offset, self.limit)
@@ -361,7 +363,7 @@ class FinancialData:
 
     @staticmethod
     def create_directories(tmp_stock_path, stock_path, stock_symbols):
-        for stock_symbol in stock_symbols[:10]:
+        for stock_symbol in stock_symbols:
             os.makedirs('{}/{}'.format(tmp_stock_path, stock_symbol.lower()))
             os.makedirs('{}/{}'.format(stock_path, stock_symbol.lower()))
 
@@ -380,7 +382,7 @@ class StocksDaily(FinancialData):
 
     def get_response(self):
 
-        for index, symbol in enumerate(self.stock_symbols[:10], start=1):
+        for index, symbol in enumerate(self.stock_symbols, start=1):
         
             querystring = {"function": self.function,
                            "symbol": symbol,
@@ -414,7 +416,7 @@ class StocksWeekly(FinancialData):
 
     def get_response(self):
 
-        for index, symbol in enumerate(self.stock_symbols[:100], start=1):
+        for index, symbol in enumerate(self.stock_symbols, start=1):
         
             querystring = {"function": self.function,
                            "symbol": symbol,
@@ -447,7 +449,7 @@ class StocksMonthly(FinancialData):
 
     def get_response(self):
 
-        for index, symbol in enumerate(self.stock_symbols[:100], start=1):
+        for index, symbol in enumerate(self.stock_symbols, start=1):
         
             querystring = {"function": self.function,
                            "symbol": symbol,
@@ -461,19 +463,19 @@ class StocksMonthly(FinancialData):
 
             super().create_file(symbol, response, self.attribute)
 
-            super().upload_blob()
+            super().upload_blob(symbol)
             
             # Pause program before submitting next API request
             time.sleep(2)
 
 class Indicator(FinancialData):
     
-    def __init__(self, path, name, ext, mode, url, headers_indicators):
+    def __init__(self, path, name, ext, mode, url, headers_indicators, dict_key):
         super().__init__(path, name, ext, mode)
         self.url = url
         self.headers_indicators = headers_indicators
         self.get_response()
-        self.create_file()
+        self.create_file(dict_key)
         super().upload_blob()
 
     def get_response(self):
@@ -484,10 +486,20 @@ class Indicator(FinancialData):
         # Output to log
         log.logging.info('Request-Response submitted for {} {} with status code of {}'.format(self.name, type(self).__name__, self.response.status_code))
 
-    def create_file(self):
-        file = open('{}/{}.{}'.format(self.path, self.name, self.ext), self.mode)
-        file.write(self.response.text)
-        file.close()      
+    def create_file(self, dict_key):
+
+        with open('{}/{}.{}'.format(self.path, self.name, self.ext), self.mode) as indicator_file:
+
+            # Create dataframe from API response
+            df = pd.DataFrame.from_dict(self.response.json()[dict_key], orient="index")
+
+            # Reset index so that date treated as separate field and reassign column names
+            df.reset_index(inplace=True)
+            df.columns = ['date', self.name]
+
+            # Dataframe to dictionary before saving to json file
+            indicator_dict = df.to_dict(orient="records")
+            json.dump(indicator_dict, indicator_file)
 
         # Output to log
         log.logging.info('{}.{} file created for {}'.format(self.name, self.ext, type(self).__name__))
