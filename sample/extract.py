@@ -21,6 +21,10 @@ class CovidData:
         self.mode = mode
 
     def get_response(self, url):
+        '''
+        Retrieve URL response
+        '''
+
         # Submit API request
         self.response = requests.get(url)
 
@@ -28,6 +32,9 @@ class CovidData:
         log.logging.info('Request-Response submitted for {} with status code of {}'.format(type(self).__name__, self.response.status_code))
 
     def create_file(self, response_type):
+        '''
+        File creation
+        '''
             
         file = open(f"{self.path}/{self.name}.{self.ext}", self.mode)
         file.write(response_type)
@@ -37,6 +44,9 @@ class CovidData:
         log.logging.info('{}.{} file created for {}'.format(self.name, self.ext, type(self).__name__))
 
     def upload_blob(self):
+        '''
+        Uploading file to Azure Blob storage
+        '''
 
         blob = BlobClient.from_connection_string(conn_str=utils.connection_string, container_name=utils.container_name, blob_name=f'{self.path}/{self.name}.{self.ext}') 
 
@@ -64,6 +74,9 @@ class Florida(CovidData):
         super().upload_blob()
 
     def get_response(self):
+        '''
+        Submit Florida API request, add data to list, increase offset for pagination in next API request
+        '''
 
         while True:
 
@@ -93,6 +106,10 @@ class Florida(CovidData):
             time.sleep(5)
 
     def create_file(self):
+        ''' 
+        Creat JSON file for Florida
+        '''
+
         with open('{}/{}.{}'.format(self.path, self.name, self.ext), self.mode) as florida_file:
             json.dump(self.data_fl, florida_file)
 
@@ -112,6 +129,9 @@ class NewYork(CovidData):
         self.upload_blob()
 
     def get_response(self):
+        '''
+        Submit New York API request, add data to list, increase offset for pagination in next API request
+        '''
 
         while True:
 
@@ -138,6 +158,10 @@ class NewYork(CovidData):
             time.sleep(15)
 
     def create_file(self):
+        ''' 
+        Create JSON file for New York
+        '''
+
         with open('{}/{}.{}'.format(self.path, self.name, self.ext), self.mode) as new_york_file:
             json.dump(self.data_ny, new_york_file)
 
@@ -157,6 +181,9 @@ class Pennsylvania(CovidData):
         super().upload_blob()
 
     def get_response(self):
+        '''
+        Submit Pennsylvania API request, add data to list, increase offset for pagination in next API request
+        '''
         
         while True:
 
@@ -183,6 +210,10 @@ class Pennsylvania(CovidData):
             time.sleep(15)
 
     def create_file(self):
+        '''
+        Create JSON file for Pennsylvania
+        '''
+
         with open('{}/{}.{}'.format(self.path, self.name, self.ext), self.mode) as penn_file:
             json.dump(self.data_pa, penn_file)
 
@@ -199,6 +230,10 @@ class Illinois(CovidData):
         super().upload_blob()
 
     def get_response(self):
+        '''
+        1. Scrape Wikipedia for list of Illinois counties and store in list
+        2. Loop through county list including county name in each request submission
+        '''
 
         # Scrape Illinois counties in order to pass county name to URL
         url_counties = 'https://en.wikipedia.org/wiki/List_of_counties_in_Illinois'
@@ -228,6 +263,10 @@ class Illinois(CovidData):
             time.sleep(60)
         
     def create_file(self):
+        '''
+        Create JSON file for Illinois
+        '''
+
         with open('{}/{}.{}'.format(self.path, self.name, self.ext), self.mode) as illinois_file:
             json.dump(self.data_il, illinois_file)
 
@@ -255,6 +294,9 @@ class Georgia(CovidData):
         super().upload_blob()
 
     def get_response(self):
+        '''
+        Submit Georgia API request, add data to list, increase offset for pagination in next API request
+        '''
 
         while True:
 
@@ -284,6 +326,10 @@ class Georgia(CovidData):
             time.sleep(15)
 
     def create_file(self):
+        '''
+        Create JSON file for Georgia
+        '''
+
         with open('{}/{}.{}'.format(self.path, self.name, self.ext), self.mode) as georgia_file:
             json.dump(self.data_ga, georgia_file)
 
@@ -307,6 +353,10 @@ class FinancialData:
         self.mode = mode
 
     def create_file(self, symbol, response, attribute):
+        '''
+        Data transformation and JSON file creation
+        '''
+
         with open('{}/{}/{}.{}'.format(self.path, symbol.lower(), self.name, self.ext), self.mode) as stock_file:
 
             # Create dataframe from API response
@@ -324,6 +374,10 @@ class FinancialData:
         log.logging.info('{}.{} file created for {} for {}'.format(self.name, self.ext, type(self).__name__, symbol))
 
     def upload_blob(self, symbol=None):
+        '''
+        1. Upload file to Azure Blob storage
+        2. If stock symbol exists, include in file path
+        '''
 
         if symbol:
 
@@ -344,6 +398,7 @@ class FinancialData:
         '''
         Scraper to retrieve stock symbols for S&P 500 to be used in API calls
         '''
+        
         url_stocks = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
         stocks = requests.get(url_stocks)
         soup = BeautifulSoup(stocks.text, 'html.parser')
@@ -363,6 +418,10 @@ class FinancialData:
 
     @staticmethod
     def create_directories(tmp_stock_path, stock_path, stock_symbols):
+        ''' 
+        Stock directory creation
+        '''
+
         for stock_symbol in stock_symbols:
             os.makedirs('{}/{}'.format(tmp_stock_path, stock_symbol.lower()))
             os.makedirs('{}/{}'.format(stock_path, stock_symbol.lower()))
@@ -381,6 +440,9 @@ class StocksDaily(FinancialData):
         self.get_response()
 
     def get_response(self):
+        '''
+        Submit API request for each stock, create file and upload file to Azure Blob storage
+        '''
 
         for index, symbol in enumerate(self.stock_symbols, start=1):
         
@@ -415,6 +477,9 @@ class StocksWeekly(FinancialData):
         self.get_response()
 
     def get_response(self):
+        '''
+        Submit API request for each stock, create file and upload file to Azure Blob storage
+        '''
 
         for index, symbol in enumerate(self.stock_symbols, start=1):
         
@@ -448,6 +513,9 @@ class StocksMonthly(FinancialData):
         self.get_response()
 
     def get_response(self):
+        '''
+        Submit API request for each stock, create file and upload file to Azure Blob storage
+        '''
 
         for index, symbol in enumerate(self.stock_symbols, start=1):
         
@@ -487,6 +555,9 @@ class Indicator(FinancialData):
         log.logging.info('Request-Response submitted for {} {} with status code of {}'.format(self.name, type(self).__name__, self.response.status_code))
 
     def create_file(self, dict_key):
+        '''
+        Data transformation and JSON file creation
+        '''
 
         with open('{}/{}.{}'.format(self.path, self.name, self.ext), self.mode) as indicator_file:
 
