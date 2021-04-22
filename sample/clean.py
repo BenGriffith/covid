@@ -62,6 +62,9 @@ class Florida(CleanAndStore):
         self.wrangle()
 
     def wrangle(self):
+        '''
+        Florida data cleaning, transformation and file creation
+        '''
 
         self.df = self.df.select(col("Age").cast("int").alias("age"),
                                 when(col("Case_") == "Yes", 1).alias("case"),
@@ -109,7 +112,8 @@ class Texas(CleanAndStore):
 
     def wrangle(self):
         """
-        Convert data frame sourced from Excel into JSON format
+        1. Convert data frame sourced from Excel into JSON format
+        2. Create PySpark data fram, data cleaning, transformation and file creation
         """
 
         drop_rows = self.df.iloc[254:]
@@ -181,6 +185,9 @@ class NewYork(CleanAndStore):
         self.wrangle()
 
     def wrangle(self):
+        '''
+        New York data cleaning, transformation and file creation
+        '''
 
         self.df = self.df.select(upper(col("county")).alias("county"), 
                                 col("cumulative_number_of_positives").cast("int").alias("total_cases"),
@@ -208,6 +215,9 @@ class Pennsylvania(CleanAndStore):
         self.wrangle()
 
     def wrangle(self):
+        '''
+        Pennsylvania data cleaning, transformation and file creation
+        '''
 
         self.df = self.df.drop('georeferenced_lat__long', ':@computed_region_nmsq_hqvv', ':@computed_region_d3gw_znnf', ':@computed_region_amqz_jbr4', ':@computed_region_r6rf_p9et', ':@computed_region_rayf_jjgk')
 
@@ -241,6 +251,9 @@ class Illinois(CleanAndStore):
         self.wrangle()
 
     def wrangle(self):
+        '''
+        Illinois data cleaning, transformation and file creation
+        '''
 
         self.df = self.df.select(upper(col("CountyName")).alias("county"),
                                 col("confirmed_cases").cast("int").alias("case_total"),
@@ -275,6 +288,9 @@ class Ohio(CleanAndStore):
         self.wrangle()
 
     def wrangle(self):
+        '''
+        Ohio data cleaning, transformation and file creation
+        '''
 
         self.df = self.df.drop("Admission Date", "Date of Death")
 
@@ -305,6 +321,9 @@ class Georgia(CleanAndStore):
         self.wrangle()
 
     def wrangle(self):
+        '''
+        Georgia data cleaning, transformation and file creation
+        '''
 
         self.df = self.df.drop('OBJECTID', 'C_NEW_PERCT_CHG', 'D_NEW_PERCT_CHG', 'C_NEW_7D_MEAN', 'D_NEW_7D_MEAN', 'C_NEW_7D_PERCT_CHG', 'D_NEW_7D_PERCT_CHG', 'GlobalID')
         
@@ -394,7 +413,8 @@ class Cases(CleanAndStore):
 
     def wrangle(self):
         """
-        Convert data frame sourced from Excel into JSON format
+        1. Convert data frame sourced from Excel into JSON format
+        2. Create PySpark data frame, data cleaning, transformation and file creation
         """
 
         counties = self.df[['countyFIPS', 'County Name', 'State', 'StateFIPS']].values
@@ -497,7 +517,8 @@ class Deaths(CleanAndStore):
 
     def wrangle(self):
         """
-        Convert data frame sourced from Excel into JSON format
+        1. Convert data frame sourced from Excel into JSON format
+        2. Create PySpark data frame, data cleaning, transformatio and file creation
         """
 
         counties = self.df[['countyFIPS', 'County Name', 'State', 'StateFIPS']].values
@@ -588,6 +609,11 @@ class Stocks:
         self.wrangle(load, save_path)
 
     def wrangle(self, load, save_path):
+        '''
+        1. Retrieve path
+        2. Loop through all .json files (daily, weekly and monthly) for each stock
+        3. Create Pandas data frame in order to transform data before converting to PySpark data frame
+        '''
 
         for stock in Path(load).glob('*/*.json'):
 
