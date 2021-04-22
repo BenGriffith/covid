@@ -5,6 +5,7 @@ import json
 import warnings
 import logging
 import utils
+import shutil
 import pandas as pd
 from bs4 import BeautifulSoup
 from logs import log
@@ -574,3 +575,7 @@ class Indicator(FinancialData):
 
         # Output to log
         log.logging.info('{}.{} file created for {}'.format(self.name, self.ext, type(self).__name__))
+
+# Cleanup
+shutil.rmtree('data')
+shutil.rmtree('tmp')
