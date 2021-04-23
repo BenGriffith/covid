@@ -24,6 +24,7 @@ Project is created with:
 * Python (supporting libraries)
 * Pandas
 * PySpark
+* Pytest
 * Azure Blob Storage
 * Azure Databricks
 * cloudpathlib
