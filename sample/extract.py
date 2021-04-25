@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup
 from logs import log
 from azure.storage.blob import BlobClient
 
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
 class CovidData:
 
@@ -22,34 +22,34 @@ class CovidData:
         self.mode = mode
 
     def get_response(self, url):
-        '''
+        """
         Retrieve URL response
-        '''
+        """
 
         # Submit API request
         self.response = requests.get(url)
 
         # Output to log
-        log.logging.info('Request-Response submitted for {} with status code of {}'.format(type(self).__name__, self.response.status_code))
+        log.logging.info("Request-Response submitted for {} with status code of {}".format(type(self).__name__, self.response.status_code))
 
     def create_file(self, response_type):
-        '''
+        """
         File creation
-        '''
+        """
             
         file = open(f"{self.path}/{self.name}.{self.ext}", self.mode)
         file.write(response_type)
         file.close()
         
         # Output to log
-        log.logging.info('{}.{} file created for {}'.format(self.name, self.ext, type(self).__name__))
+        log.logging.info("{}.{} file created for {}".format(self.name, self.ext, type(self).__name__))
 
     def upload_blob(self):
-        '''
+        """
         Uploading file to Azure Blob storage
-        '''
+        """
 
-        blob = BlobClient.from_connection_string(conn_str=utils.connection_string, container_name=utils.container_name, blob_name=f'{self.path}/{self.name}.{self.ext}') 
+        blob = BlobClient.from_connection_string(conn_str=utils.connection_string, container_name=utils.container_name, blob_name=f"{self.path}/{self.name}.{self.ext}") 
 
         with open(f"{self.path}/{self.name}.{self.ext}", "rb") as data:
            blob.upload_blob(data)
@@ -75,23 +75,23 @@ class Florida(CovidData):
         super().upload_blob()
 
     def get_response(self):
-        '''
+        """
         Submit Florida API request, add data to list, increase offset for pagination in next API request
-        '''
+        """
 
         while True:
 
-            url = 'https://services1.arcgis.com/CY1LXxl9zlJeBuRZ/arcgis/rest/services/Case_Data_{}/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&resultOffset={}&resultRecordCount={}&f=json'.format(self.name[-4:], self.offset, self.limit)
+            url = "https://services1.arcgis.com/CY1LXxl9zlJeBuRZ/arcgis/rest/services/Case_Data_{}/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&resultOffset={}&resultRecordCount={}&f=json".format(self.name[-4:], self.offset, self.limit)
             response = requests.get(url)
 
             # Output to log
-            log.logging.info('Request-Response {} submitted for {} with status code of {}'.format(self.counter, type(self).__name__, response.status_code))
+            log.logging.info("Request-Response {} submitted for {} with status code of {}".format(self.counter, type(self).__name__, response.status_code))
 
             # If API response returns data add it to list
             # If API response does not return any data break the loop construct
-            if response.json()['features']:
+            if response.json()["features"]:
                 
-                current_response_data = [feature['attributes'] for feature in response.json()['features']]
+                current_response_data = [feature["attributes"] for feature in response.json()["features"]]
                 
                 for row in current_response_data:
                     self.data_fl.append(row)
@@ -107,15 +107,15 @@ class Florida(CovidData):
             time.sleep(5)
 
     def create_file(self):
-        ''' 
+        """ 
         Creat JSON file for Florida
-        '''
+        """
 
-        with open('{}/{}.{}'.format(self.path, self.name, self.ext), self.mode) as florida_file:
+        with open("{}/{}.{}".format(self.path, self.name, self.ext), self.mode) as florida_file:
             json.dump(self.data_fl, florida_file)
 
         # Output to log
-        log.logging.info('{}.{} file created for {}'.format(self.name, self.ext, type(self).__name__))
+        log.logging.info("{}.{} file created for {}".format(self.name, self.ext, type(self).__name__))
 
 class NewYork(CovidData):
 
@@ -130,22 +130,22 @@ class NewYork(CovidData):
         self.upload_blob()
 
     def get_response(self):
-        '''
+        """
         Submit New York API request, add data to list, increase offset for pagination in next API request
-        '''
+        """
 
         while True:
 
             # Submit API request
-            url = 'https://health.data.ny.gov/resource/xdss-u53e.json?$limit={}&$offset={}'.format(self.limit, self.offset)
+            url = "https://health.data.ny.gov/resource/xdss-u53e.json?$limit={}&$offset={}".format(self.limit, self.offset)
             response = requests.get(url)
 
             # Output to log
-            log.logging.info('Request-Response {} submitted for {} with status code of {}'.format(self.counter, type(self).__name__, response.status_code))
+            log.logging.info("Request-Response {} submitted for {} with status code of {}".format(self.counter, type(self).__name__, response.status_code))
             
             # If API response returns data add it to list
             # If API response does not return any data break the loop construct
-            if response.text.strip() != '[]':
+            if response.text.strip() != "[]":
                 for row in response.json():
                     self.data_ny.append(row)
             else:
@@ -159,15 +159,15 @@ class NewYork(CovidData):
             time.sleep(15)
 
     def create_file(self):
-        ''' 
+        """ 
         Create JSON file for New York
-        '''
+        """
 
-        with open('{}/{}.{}'.format(self.path, self.name, self.ext), self.mode) as new_york_file:
+        with open("{}/{}.{}".format(self.path, self.name, self.ext), self.mode) as new_york_file:
             json.dump(self.data_ny, new_york_file)
 
         # Output to log
-        log.logging.info('{}.{} file created for {}'.format(self.name, self.ext, type(self).__name__))
+        log.logging.info("{}.{} file created for {}".format(self.name, self.ext, type(self).__name__))
 
 class Pennsylvania(CovidData):
 
@@ -182,22 +182,22 @@ class Pennsylvania(CovidData):
         super().upload_blob()
 
     def get_response(self):
-        '''
+        """
         Submit Pennsylvania API request, add data to list, increase offset for pagination in next API request
-        '''
+        """
         
         while True:
 
             # Submit API request
-            url = 'https://data.pa.gov/resource/j72v-r42c.json?$limit={}&$offset={}'.format(self.limit, self.offset)
+            url = "https://data.pa.gov/resource/j72v-r42c.json?$limit={}&$offset={}".format(self.limit, self.offset)
             response = requests.get(url)
 
             # Output to log
-            log.logging.info('Request-Response {} submitted for {} with status code of {}'.format(self.counter, type(self).__name__, response.status_code))
+            log.logging.info("Request-Response {} submitted for {} with status code of {}".format(self.counter, type(self).__name__, response.status_code))
             
             # If API response returns data add it to list
             # If API response does not return any data break the loop construct
-            if response.text.strip() != '[]':
+            if response.text.strip() != "[]":
                 for row in response.json():
                     self.data_pa.append(row)
             else:
@@ -211,15 +211,15 @@ class Pennsylvania(CovidData):
             time.sleep(15)
 
     def create_file(self):
-        '''
+        """
         Create JSON file for Pennsylvania
-        '''
+        """
 
-        with open('{}/{}.{}'.format(self.path, self.name, self.ext), self.mode) as penn_file:
+        with open("{}/{}.{}".format(self.path, self.name, self.ext), self.mode) as penn_file:
             json.dump(self.data_pa, penn_file)
 
         # Output to log
-        log.logging.info('{}.{} file created for {}'.format(self.name, self.ext, type(self).__name__))
+        log.logging.info("{}.{} file created for {}".format(self.name, self.ext, type(self).__name__))
 
 class Illinois(CovidData):
 
@@ -231,48 +231,48 @@ class Illinois(CovidData):
         super().upload_blob()
 
     def get_response(self):
-        '''
+        """
         1. Scrape Wikipedia for list of Illinois counties and store in list
         2. Loop through county list including county name in each request submission
-        '''
+        """
 
         # Scrape Illinois counties in order to pass county name to URL
-        url_counties = 'https://en.wikipedia.org/wiki/List_of_counties_in_Illinois'
+        url_counties = "https://en.wikipedia.org/wiki/List_of_counties_in_Illinois"
         response_url_counties = requests.get(url_counties)
-        soup = BeautifulSoup(response_url_counties.text, 'html.parser')
+        soup = BeautifulSoup(response_url_counties.text, "html.parser")
 
         counties = []
 
-        for county in soup.select('tbody > tr > th > a'):
+        for county in soup.select("tbody > tr > th > a"):
             counties.append(county.get_text())
 
-        counties = [county.split(' ')[0] for county in counties]
+        counties = [county.split(" ")[0] for county in counties]
 
         for index, county in enumerate(counties, start=1):
 
             # Submit API request
-            url = 'https://idph.illinois.gov/DPHPublicInformation/api/COVID/GetCountyHistorical?countyName={}'.format(county)
+            url = "https://idph.illinois.gov/DPHPublicInformation/api/COVID/GetCountyHistorical?countyName={}".format(county)
             response = requests.get(url)
 
             # Output to log
-            log.logging.info('Request-Response {} submitted for {} with status code of {}'.format(index, type(self).__name__, response.status_code))
+            log.logging.info("Request-Response {} submitted for {} with status code of {}".format(index, type(self).__name__, response.status_code))
 
-            for row in response.json()['values']:
+            for row in response.json()["values"]:
                 self.data_il.append(row)
 
             # Pause program before submitting next API request
-            time.sleep(60)
+            time.sleep(180)
         
     def create_file(self):
-        '''
+        """
         Create JSON file for Illinois
-        '''
+        """
 
-        with open('{}/{}.{}'.format(self.path, self.name, self.ext), self.mode) as illinois_file:
+        with open("{}/{}.{}".format(self.path, self.name, self.ext), self.mode) as illinois_file:
             json.dump(self.data_il, illinois_file)
 
         # Output to log
-        log.logging.info('{}.{} file created for {}'.format(self.name, self.ext, type(self).__name__))
+        log.logging.info("{}.{} file created for {}".format(self.name, self.ext, type(self).__name__))
 
 class Ohio(CovidData):
 
@@ -295,24 +295,24 @@ class Georgia(CovidData):
         super().upload_blob()
 
     def get_response(self):
-        '''
+        """
         Submit Georgia API request, add data to list, increase offset for pagination in next API request
-        '''
+        """
 
         while True:
 
             # Submit API request
-            url = 'https://services7.arcgis.com/Za9Nk6CPIPbvR1t7/arcgis/rest/services/Georgia_PUI_Data_Download/FeatureServer/0/query?outFields=*&where=1%3D1&resultOffset={}&resultRecordCount={}&f=json'.format(self.offset, self.limit)
+            url = "https://services7.arcgis.com/Za9Nk6CPIPbvR1t7/arcgis/rest/services/Georgia_PUI_Data_Download/FeatureServer/0/query?outFields=*&where=1%3D1&resultOffset={}&resultRecordCount={}&f=json".format(self.offset, self.limit)
             response = requests.get(url)
 
             # Output to log
-            log.logging.info('Request-Response {} submitted for {} with status code of {}'.format(self.counter, type(self).__name__, response.status_code))
+            log.logging.info("Request-Response {} submitted for {} with status code of {}".format(self.counter, type(self).__name__, response.status_code))
 
             # If API response returns data add it to list
             # If API response does not return any data break the loop construct
-            if response.json()['features']:
+            if response.json()["features"]:
                 
-                current_response_data = [feature['attributes'] for feature in response.json()['features']]
+                current_response_data = [feature["attributes"] for feature in response.json()["features"]]
                 
                 for row in current_response_data:
                     self.data_ga.append(row)
@@ -327,15 +327,15 @@ class Georgia(CovidData):
             time.sleep(15)
 
     def create_file(self):
-        '''
+        """
         Create JSON file for Georgia
-        '''
+        """
 
-        with open('{}/{}.{}'.format(self.path, self.name, self.ext), self.mode) as georgia_file:
+        with open("{}/{}.{}".format(self.path, self.name, self.ext), self.mode) as georgia_file:
             json.dump(self.data_ga, georgia_file)
 
         # Output to log
-        log.logging.info('{}.{} file created for {}'.format(self.name, self.ext, type(self).__name__))
+        log.logging.info("{}.{} file created for {}".format(self.name, self.ext, type(self).__name__))
 
 class USAFacts(CovidData):
 
@@ -354,78 +354,78 @@ class FinancialData:
         self.mode = mode
 
     def create_file(self, symbol, response, attribute):
-        '''
+        """
         Data transformation and JSON file creation
-        '''
+        """
 
-        with open('{}/{}/{}.{}'.format(self.path, symbol.lower(), self.name, self.ext), self.mode) as stock_file:
+        with open("{}/{}/{}.{}".format(self.path, symbol.lower(), self.name, self.ext), self.mode) as stock_file:
 
             # Create dataframe from API response
             df = pd.DataFrame.from_dict(response.json()[attribute], orient="index")
 
             # Reset index so that date treated as separate field and reassign column names
             df.reset_index(inplace=True)
-            df.columns = ['date', 'open', 'high', 'low', 'close', 'volume']
+            df.columns = ["date", "open", "high", "low", "close", "volume"]
 
             # Dataframe to dictionary before saving to json file
             stock_dict = df.to_dict(orient="records")
             json.dump(stock_dict, stock_file)
 
         # Output to log
-        log.logging.info('{}.{} file created for {} for {}'.format(self.name, self.ext, type(self).__name__, symbol))
+        log.logging.info("{}.{} file created for {} for {}".format(self.name, self.ext, type(self).__name__, symbol))
 
     def upload_blob(self, symbol=None):
-        '''
+        """
         1. Upload file to Azure Blob storage
         2. If stock symbol exists, include in file path
-        '''
+        """
 
         if symbol:
 
-            blob = BlobClient.from_connection_string(conn_str=utils.connection_string, container_name=utils.container_name, blob_name=f'{self.path}/{symbol.lower()}/{self.name}.{self.ext}') 
+            blob = BlobClient.from_connection_string(conn_str=utils.connection_string, container_name=utils.container_name, blob_name=f"{self.path}/{symbol.lower()}/{self.name}.{self.ext}") 
 
             with open(f"{self.path}/{symbol.lower()}/{self.name}.{self.ext}", "rb") as data:
                 blob.upload_blob(data)
 
         else:
 
-            blob = BlobClient.from_connection_string(conn_str=utils.connection_string, container_name=utils.container_name, blob_name=f'{self.path}/{self.name}.{self.ext}') 
+            blob = BlobClient.from_connection_string(conn_str=utils.connection_string, container_name=utils.container_name, blob_name=f"{self.path}/{self.name}.{self.ext}") 
 
             with open(f"{self.path}/{self.name}.{self.ext}", "rb") as data:
                 blob.upload_blob(data)    
 
     @staticmethod
     def get_stock_symbols():
-        '''
+        """
         Scraper to retrieve stock symbols for S&P 500 to be used in API calls
-        '''
+        """
         
-        url_stocks = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
+        url_stocks = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
         stocks = requests.get(url_stocks)
-        soup = BeautifulSoup(stocks.text, 'html.parser')
+        soup = BeautifulSoup(stocks.text, "html.parser")
 
-        sp_stocks = BeautifulSoup(str(soup.find_all(id='constituents')), 'html.parser')
-        sp_stocks = BeautifulSoup(str(sp_stocks.select('tbody > tr > td > a')), 'html.parser')
+        sp_stocks = BeautifulSoup(str(soup.find_all(id="constituents")), "html.parser")
+        sp_stocks = BeautifulSoup(str(sp_stocks.select("tbody > tr > td > a")), "html.parser")
 
         stock_symbols = []
 
-        for i in range(0, len(sp_stocks.find_all(class_='external text')), 2):
-            symbol = sp_stocks.find_all(class_='external text')[i].get_text()
-            if symbol.find('.') > 0:
-                symbol = symbol.replace('.', '-')
+        for i in range(0, len(sp_stocks.find_all(class_="external text")), 2):
+            symbol = sp_stocks.find_all(class_="external text")[i].get_text()
+            if symbol.find(".") > 0:
+                symbol = symbol.replace(".", "-")
             stock_symbols.append(symbol)
 
         return stock_symbols
 
     @staticmethod
     def create_directories(tmp_stock_path, stock_path, stock_symbols):
-        ''' 
+        """ 
         Stock directory creation
-        '''
+        """
 
         for stock_symbol in stock_symbols:
-            os.makedirs('{}/{}'.format(tmp_stock_path, stock_symbol.lower()))
-            os.makedirs('{}/{}'.format(stock_path, stock_symbol.lower()))
+            os.makedirs("{}/{}".format(tmp_stock_path, stock_symbol.lower()))
+            os.makedirs("{}/{}".format(stock_path, stock_symbol.lower()))
 
 class StocksDaily(FinancialData):
 
@@ -435,15 +435,15 @@ class StocksDaily(FinancialData):
         self.function = function
         self.url = url
         self.headers_stocks = headers_stocks
-        self.outputsize = 'full'
-        self.datatype = 'json'
-        self.attribute = 'Time Series (Daily)'
+        self.outputsize = "full"
+        self.datatype = "json"
+        self.attribute = "Time Series (Daily)"
         self.get_response()
 
     def get_response(self):
-        '''
+        """
         Submit API request for each stock, create file and upload file to Azure Blob storage
-        '''
+        """
 
         for index, symbol in enumerate(self.stock_symbols, start=1):
         
@@ -456,7 +456,7 @@ class StocksDaily(FinancialData):
             response = requests.get(self.url, headers=self.headers_stocks, params=querystring)
 
             # Output to log
-            log.logging.info('Request-Response {} submitted for {} with status code of {}'.format(index, type(self).__name__, response.status_code))
+            log.logging.info("Request-Response {} submitted for {} with status code of {}".format(index, type(self).__name__, response.status_code))
             
             super().create_file(symbol, response, self.attribute)
 
@@ -473,14 +473,14 @@ class StocksWeekly(FinancialData):
         self.function = function
         self.url = url
         self.headers_stocks = headers_stocks
-        self.datatype = 'json'
-        self.attribute = 'Weekly Time Series'
+        self.datatype = "json"
+        self.attribute = "Weekly Time Series"
         self.get_response()
 
     def get_response(self):
-        '''
+        """
         Submit API request for each stock, create file and upload file to Azure Blob storage
-        '''
+        """
 
         for index, symbol in enumerate(self.stock_symbols, start=1):
         
@@ -492,7 +492,7 @@ class StocksWeekly(FinancialData):
             response = requests.get(self.url, headers=self.headers_stocks, params=querystring)
 
             # Output to log
-            log.logging.info('Request-Response {} submitted for {} with status code of {}'.format(index, type(self).__name__, response.status_code))
+            log.logging.info("Request-Response {} submitted for {} with status code of {}".format(index, type(self).__name__, response.status_code))
 
             super().create_file(symbol, response, self.attribute)
 
@@ -509,14 +509,14 @@ class StocksMonthly(FinancialData):
         self.function = function
         self.url = url
         self.headers_stocks = headers_stocks
-        self.datatype = 'json'
-        self.attribute = 'Monthly Time Series'
+        self.datatype = "json"
+        self.attribute = "Monthly Time Series"
         self.get_response()
 
     def get_response(self):
-        '''
+        """
         Submit API request for each stock, create file and upload file to Azure Blob storage
-        '''
+        """
 
         for index, symbol in enumerate(self.stock_symbols, start=1):
         
@@ -528,7 +528,7 @@ class StocksMonthly(FinancialData):
             response = requests.get(self.url, headers=self.headers_stocks, params=querystring)
 
             # Output to log
-            log.logging.info('Request-Response {} submitted for {} with status code of {}'.format(index, type(self).__name__, response.status_code))
+            log.logging.info("Request-Response {} submitted for {} with status code of {}".format(index, type(self).__name__, response.status_code))
 
             super().create_file(symbol, response, self.attribute)
 
@@ -553,29 +553,25 @@ class Indicator(FinancialData):
         self.response = requests.get(self.url, headers=self.headers_indicators)
 
         # Output to log
-        log.logging.info('Request-Response submitted for {} {} with status code of {}'.format(self.name, type(self).__name__, self.response.status_code))
+        log.logging.info("Request-Response submitted for {} {} with status code of {}".format(self.name, type(self).__name__, self.response.status_code))
 
     def create_file(self, dict_key):
-        '''
+        """
         Data transformation and JSON file creation
-        '''
+        """
 
-        with open('{}/{}.{}'.format(self.path, self.name, self.ext), self.mode) as indicator_file:
+        with open("{}/{}.{}".format(self.path, self.name, self.ext), self.mode) as indicator_file:
 
             # Create dataframe from API response
             df = pd.DataFrame.from_dict(self.response.json()[dict_key], orient="index")
 
             # Reset index so that date treated as separate field and reassign column names
             df.reset_index(inplace=True)
-            df.columns = ['date', self.name]
+            df.columns = ["date", self.name]
 
             # Dataframe to dictionary before saving to json file
             indicator_dict = df.to_dict(orient="records")
             json.dump(indicator_dict, indicator_file)
 
         # Output to log
-        log.logging.info('{}.{} file created for {}'.format(self.name, self.ext, type(self).__name__))
-
-# Cleanup
-shutil.rmtree('data')
-shutil.rmtree('tmp')
+        log.logging.info("{}.{} file created for {}".format(self.name, self.ext, type(self).__name__))
