@@ -178,9 +178,9 @@ class CleanAndStore:
         # Output to log
         log.logging.info(f"Cleaning and File Creation for {type(self).__name__} complete: {self.df.count()} records and {len(self.df.columns)} fields")
 
-    def write_to_mysql(df, table):
+    def write_to_mysql(self, table):
 
-        df.write.format('jdbc').options(
+        self.df.write.format('jdbc').options(
             url=utils.db_url, 
             driver=utils.db_driver, 
             dbtable=table, 
@@ -217,9 +217,11 @@ class Florida(CleanAndStore):
         super().save_file("preprocessed", f"florida-{self.year}", "parquet")
 
         self.df = self.df.select("date", "county", "state", "case").groupBy("date", "county", "state").agg(count("case").cast("int").alias("new_cases")).orderBy("date", "county")
+        self.df = self.df.withColumn("county_id", get_county_id(self.df.county, self.df.state))
+        self.df = self.df.select("date", "county_id", "new_cases")
 
-        # Write final
-        super().save_file("final", f"florida-{self.year}", "parquet")
+        # Write to MySQL
+        super().write_to_mysql("cases")
 
 class Texas(CleanAndStore):
 
@@ -307,9 +309,11 @@ class Texas(CleanAndStore):
         super().save_file("preprocessed", "texas", "parquet")
 
         self.df = self.df.select("date", "county", "state", "new_cases")
+        self.df = self.df.withColumn("county_id", get_county_id(self.df.county, self.df.state))
+        self.df = self.df.select("date", "county_id", "new_cases")
 
-        # Write final
-        super().save_file("final", "texas", "parquet")
+        # Write to MySQL
+        super().write_to_mysql("cases")
         
 
 class NewYork(CleanAndStore):
@@ -338,9 +342,11 @@ class NewYork(CleanAndStore):
         super().save_file("preprocessed", "new-york", "parquet")
 
         self.df = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
+        self.df = self.df.withColumn("county_id", get_county_id(self.df.county, self.df.state))
+        self.df = self.df.select("date", "county_id", "new_cases")
 
-        # Write final
-        super().save_file("final", "new-york", "parquet")
+        # Write to MySQL
+        super().write_to_mysql("cases")
 
 class Pennsylvania(CleanAndStore):
 
@@ -374,9 +380,11 @@ class Pennsylvania(CleanAndStore):
         super().save_file("preprocessed", "pennsylvania", "parquet")
 
         self.df = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
+        self.df = self.df.withColumn("county_id", get_county_id(self.df.county, self.df.state))
+        self.df = self.df.select("date", "county_id", "new_cases")
 
-        # Write final
-        super().save_file("final", "pennsylvania", "parquet")
+        # Write to MySQL
+        super().write_to_mysql("cases")
 
 class Illinois(CleanAndStore):
 
@@ -411,9 +419,11 @@ class Illinois(CleanAndStore):
         super().save_file("preprocessed", "illinois", "parquet")
 
         self.df = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
+        self.df = self.df.withColumn("county_id", get_county_id(self.df.county, self.df.state))
+        self.df = self.df.select("date", "county_id", "new_cases")
 
-        # Write final
-        super().save_file("final", "illinois", "parquet")
+        # Write to MySQL
+        super().write_to_mysql("cases")
 
 class Ohio(CleanAndStore):
     
@@ -444,9 +454,11 @@ class Ohio(CleanAndStore):
         super().save_file("preprocessed", "ohio", "parquet")
 
         self.df = self.df.select("date", "county", "state", "case").groupBy("date", "county", "state").agg(count("case").cast("int").alias("new_cases")).orderBy("date", "county")
+        self.df = self.df.withColumn("county_id", get_county_id(self.df.county, self.df.state))
+        self.df = self.df.select("date", "county_id", "new_cases")
 
-        # Write final
-        super().save_file("final", "ohio", "parquet")
+        # Write to MySQL
+        super().write_to_mysql("cases")
 
 class Georgia(CleanAndStore):
 
@@ -511,9 +523,11 @@ class Georgia(CleanAndStore):
         super().save_file("preprocessed", "georgia", "parquet")        
 
         self.df = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
+        self.df = self.df.withColumn("county_id", get_county_id(self.df.county, self.df.state))
+        self.df = self.df.select("date", "county_id", "new_cases")
 
-        # Write final
-        super().save_file("final", "georgia", "parquet")
+        # Write to MySQL
+        super().write_to_mysql("cases")
 
 class Cases(CleanAndStore):
 
@@ -622,9 +636,11 @@ class Cases(CleanAndStore):
         self.df = self.df.withColumn("new_cases", (self.df.case_total - self.df.previous_day))    
 
         self.df = self.df.select("date", "county", "state", "new_cases")                  
+        self.df = self.df.withColumn("county_id", get_county_id(self.df.county, self.df.state))
+        self.df = self.df.select("date", "county_id", "new_cases")
 
-        # Write final
-        super().save_file("final", "cases", "parquet")
+        # Write to MySQL
+        super().write_to_mysql("cases")
 
 class Deaths(CleanAndStore):
 
@@ -734,9 +750,11 @@ class Deaths(CleanAndStore):
         self.df = self.df.withColumn("new_deaths", (self.df.death_total - self.df.previous_day))         
 
         self.df = self.df.select("date", "county", "state", "new_deaths")
+        self.df = self.df.withColumn("county_id", get_county_id(self.df.county, self.df.state))
+        self.df = self.df.select("date", "county_id", "new_deaths")
 
-        # Write final
-        super().save_file("final", "deaths", "parquet")
+        # Write to MySQL
+        super().write_to_mysql("deaths")
 
 class Population(CleanAndStore):
 
@@ -758,8 +776,10 @@ class Population(CleanAndStore):
 
             else:
 
-                # Write 
-                super().save_file("final", "population", "parquet")
+                self.df = self.df.select("county_id", "population")
+
+                # Write to MySQL
+                super().write_to_mysql("population")
 
 class Stocks:
 
@@ -810,21 +830,29 @@ class Stocks:
                                     col("close").cast("float").alias("close"),
                                     col("volume").cast("float").alias("volume")).orderBy("date")
             
-            
-            azure_save_path = f"{save_path}/{stock_symbol}/final/{temp}"
+            self.df = self.df.withColumn("stock", lit(upper(stock_symbol)))
 
-            self.df.write.parquet(azure_save_path)
+            if temp == "daily":
+                super().write_to_mysql("stocks_daily")
+            elif temp == "weekly":
+                super().write_to_mysql("stocks_weekly")
+            else:
+                super().write_to_mysql("stocks_monthly")
+                    
+            # azure_save_path = f"{save_path}/{stock_symbol}/final/{temp}"
 
-            temp_path = Path(azure_save_path)
+            # self.df.write.parquet(azure_save_path)
 
-            for temp_file in temp_path.glob("*.parquet"):
+            # temp_path = Path(azure_save_path)
+
+            # for temp_file in temp_path.glob("*.parquet"):
                 
-                blob = BlobClient.from_connection_string(conn_str=utils.connection_string, container_name=utils.container_name, blob_name=f"{azure_save_path}/{temp_file.stem}{temp_file.suffix}") 
+            #     blob = BlobClient.from_connection_string(conn_str=utils.connection_string, container_name=utils.container_name, blob_name=f"{azure_save_path}/{temp_file.stem}{temp_file.suffix}") 
 
-                with open(temp_file, "rb") as file:
-                    blob.upload_blob(file)
+            #     with open(temp_file, "rb") as file:
+            #         blob.upload_blob(file)
 
-            shutil.rmtree(temp_path)            
+            # shutil.rmtree(temp_path)            
             
             shutil.rmtree("tmp")
 
@@ -871,4 +899,4 @@ class Indicator(CleanAndStore):
         self.df = self.df.select(to_date("date").alias("date"), col(self.indicator).cast("float").alias(self.indicator)).orderBy("date")
 
         # Write final
-        super().save_file("final", self.indicator, "parquet")
+        super().write_to_mysql(self.indicator)
