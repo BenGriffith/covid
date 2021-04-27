@@ -22,36 +22,6 @@ warnings.filterwarnings("ignore")
 
 spark = SparkSession.builder.config("spark.jars.packages", "mysql:mysql-connector-java:8.0.24").getOrCreate()
 
-def get_id(county, state):
-    
-    try:
-        connection = mysql.connector.connect(
-            user=utils.db_user, 
-            password=utils.db_pw, 
-            host=utils.db_host, 
-            port=utils.db_port, 
-            database=utils.db_name, 
-            ssl_disabled=True)
-
-    except mysql.connector.Error as err:
-
-        # Output to log
-        log.logging.info(f"CONNECTION ERROR: {err}")
-        
-    cursor = connection.cursor()
-    cursor.execute("SELECT id \
-                    FROM county \
-                    WHERE county = %s and state = %s;", (county, state))
-    rows = cursor.fetchall()
-    county_id = rows[0]
-
-    cursor.close()
-    connection.close()
-    
-    return county_id[0]
-
-get_county_id = udf(get_id, IntegerType())
-
 class CleanAndStore:
 
     def __init__(self, load, load_type, save_path):
@@ -82,7 +52,6 @@ class CleanAndStore:
 
         return file_path
         
-
     def load_file(self, load, load_type):
         """
         1. Retrieve file path from download_blob method
@@ -100,8 +69,6 @@ class CleanAndStore:
             # Output to log
             log.logging.info("{} file loaded for cleaning".format(load))
 
-            shutil.rmtree("tmp")
-
             return self.df
 
         elif load_type == "json":
@@ -114,8 +81,6 @@ class CleanAndStore:
 
             # Output to log
             log.logging.info("{} file loaded for cleaning".format(load))
-
-            shutil.rmtree("tmp")
 
             return self.df
 
@@ -178,6 +143,40 @@ class CleanAndStore:
         # Output to log
         log.logging.info(f"Cleaning and File Creation for {type(self).__name__} complete: {self.df.count()} records and {len(self.df.columns)} fields")
 
+    @staticmethod
+    @udf(returnType=IntegerType())
+    def get_county_id(county, state):
+    
+        try:
+            connection = mysql.connector.connect(
+                user=utils.db_user, 
+                password=utils.db_pw, 
+                host=utils.db_host, 
+                port=utils.db_port, 
+                database=utils.db_name)
+
+            cursor = connection.cursor()
+            cursor.execute("SELECT county_id FROM county WHERE county = %s and state = %s;", (county, state))
+            rows = cursor.fetchall()
+            county_id = rows[0]
+
+            cursor.close()
+            connection.close()
+            
+            return county_id[0]
+
+        except mysql.connector.Error as err:
+
+            # Output to log
+            log.logging.info(f"CONNECTION ERROR: {err}")
+
+    def create_final_covid_df(self):
+        
+        # Connection setup
+        # Pass cursor to function
+        self.df = self.df.withColumn("county_id", self.get_county_id(col("county"), col("state")))
+        self.df = self.df.select("date", "county_id", "new_cases").orderBy("date", "county_id")
+
     def write_to_mysql(self, table):
 
         self.df.write.format('jdbc').options(
@@ -186,6 +185,10 @@ class CleanAndStore:
             dbtable=table, 
             user=utils.db_user, 
             password=utils.db_pw).mode("overwrite").save()
+
+        tmp_path = Path("tmp")
+        if tmp_path.exists() and tmp_path.is_dir():
+            shutil.rmtree(tmp_path)
 
 class Florida(CleanAndStore):
 
@@ -217,8 +220,8 @@ class Florida(CleanAndStore):
         super().save_file("preprocessed", f"florida-{self.year}", "parquet")
 
         self.df = self.df.select("date", "county", "state", "case").groupBy("date", "county", "state").agg(count("case").cast("int").alias("new_cases")).orderBy("date", "county")
-        self.df = self.df.withColumn("county_id", get_county_id(self.df.county, self.df.state))
-        self.df = self.df.select("date", "county_id", "new_cases")
+
+        super().create_final_covid_df()
 
         # Write to MySQL
         super().write_to_mysql("cases")
@@ -309,9 +312,9 @@ class Texas(CleanAndStore):
         super().save_file("preprocessed", "texas", "parquet")
 
         self.df = self.df.select("date", "county", "state", "new_cases")
-        self.df = self.df.withColumn("county_id", get_county_id(self.df.county, self.df.state))
-        self.df = self.df.select("date", "county_id", "new_cases")
 
+        super().create_final_covid_df()
+        
         # Write to MySQL
         super().write_to_mysql("cases")
         
@@ -342,8 +345,8 @@ class NewYork(CleanAndStore):
         super().save_file("preprocessed", "new-york", "parquet")
 
         self.df = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
-        self.df = self.df.withColumn("county_id", get_county_id(self.df.county, self.df.state))
-        self.df = self.df.select("date", "county_id", "new_cases")
+
+        super().create_final_covid_df()
 
         # Write to MySQL
         super().write_to_mysql("cases")
@@ -380,8 +383,8 @@ class Pennsylvania(CleanAndStore):
         super().save_file("preprocessed", "pennsylvania", "parquet")
 
         self.df = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
-        self.df = self.df.withColumn("county_id", get_county_id(self.df.county, self.df.state))
-        self.df = self.df.select("date", "county_id", "new_cases")
+
+        super().create_final_covid_df()
 
         # Write to MySQL
         super().write_to_mysql("cases")
@@ -419,8 +422,8 @@ class Illinois(CleanAndStore):
         super().save_file("preprocessed", "illinois", "parquet")
 
         self.df = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
-        self.df = self.df.withColumn("county_id", get_county_id(self.df.county, self.df.state))
-        self.df = self.df.select("date", "county_id", "new_cases")
+
+        super().create_final_covid_df()
 
         # Write to MySQL
         super().write_to_mysql("cases")
@@ -454,8 +457,8 @@ class Ohio(CleanAndStore):
         super().save_file("preprocessed", "ohio", "parquet")
 
         self.df = self.df.select("date", "county", "state", "case").groupBy("date", "county", "state").agg(count("case").cast("int").alias("new_cases")).orderBy("date", "county")
-        self.df = self.df.withColumn("county_id", get_county_id(self.df.county, self.df.state))
-        self.df = self.df.select("date", "county_id", "new_cases")
+
+        super().create_final_covid_df()
 
         # Write to MySQL
         super().write_to_mysql("cases")
@@ -523,8 +526,8 @@ class Georgia(CleanAndStore):
         super().save_file("preprocessed", "georgia", "parquet")        
 
         self.df = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
-        self.df = self.df.withColumn("county_id", get_county_id(self.df.county, self.df.state))
-        self.df = self.df.select("date", "county_id", "new_cases")
+
+        super().create_final_covid_df()
 
         # Write to MySQL
         super().write_to_mysql("cases")
@@ -636,8 +639,8 @@ class Cases(CleanAndStore):
         self.df = self.df.withColumn("new_cases", (self.df.case_total - self.df.previous_day))    
 
         self.df = self.df.select("date", "county", "state", "new_cases")                  
-        self.df = self.df.withColumn("county_id", get_county_id(self.df.county, self.df.state))
-        self.df = self.df.select("date", "county_id", "new_cases")
+
+        super().create_final_covid_df()
 
         # Write to MySQL
         super().write_to_mysql("cases")
@@ -750,36 +753,36 @@ class Deaths(CleanAndStore):
         self.df = self.df.withColumn("new_deaths", (self.df.death_total - self.df.previous_day))         
 
         self.df = self.df.select("date", "county", "state", "new_deaths")
-        self.df = self.df.withColumn("county_id", get_county_id(self.df.county, self.df.state))
-        self.df = self.df.select("date", "county_id", "new_deaths")
+
+        super().create_final_covid_df()
 
         # Write to MySQL
         super().write_to_mysql("deaths")
 
 class Population(CleanAndStore):
 
-    def __init__(self, load, load_type, save_path, action):
+    def __init__(self, load, load_type, save_path, action=0):
         super().__init__(load, load_type, save_path)
         self.wrangle(action)
         
-        def wrangle(self, action):
+    def wrangle(self, action):
 
-            self.df = self.df.select(col("countyFIPS").cast("int").alias("county_id"),
-                                    upper(trim(regexp_replace(col("County Name"), "COUNTY", ""))).alias("county"),
-                                    "state",
-                                    col("population").cast("int").alias("population")).distinct()
+        self.df = self.df.select(col("countyFIPS").cast("int").alias("county_id"),
+                                upper(col("County Name")).alias("county"),
+                                "state",
+                                col("population").cast("int").alias("population")).distinct()
 
-            if action == 1:
- 
-                populate_unique_id = self.df.select(col("county_id"), "county", "state")
-                super().write_to_mysql(populate_unique_id, "county")
+        if action == 1:
 
-            else:
+            self.df = self.df.select(col("county_id"), trim(regexp_replace(col("county"), "COUNTY", "")).alias("county"), "state")
+            super().write_to_mysql("county")
 
-                self.df = self.df.select("county_id", "population")
+        else:
 
-                # Write to MySQL
-                super().write_to_mysql("population")
+            self.df = self.df.select("county_id", "population")
+
+            # Write to MySQL
+            super().write_to_mysql("population")
 
 class Stocks:
 
@@ -882,8 +885,6 @@ class Indicator(CleanAndStore):
             file.write(blob_client.download_blob().readall())
 
         self.df = pd.read_json(f"tmp/{load[load.rfind('/')+1:]}")
-
-        shutil.rmtree("tmp")
             
         # Output to log
         log.logging.info("{} file loaded for cleaning".format(load))
