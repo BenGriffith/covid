@@ -12,12 +12,8 @@ def initial():
     os.makedirs(utils.indicator_path)
 
 
-def incremental(run_date):
+def incremental(run_date, ga_run_date):
 
     # Incremental temporary directories
     os.makedirs('tmp/incremental/county/{}'.format(run_date))
-    os.makedirs('tmp/incremental/financial/stocks/{}'.format(run_date))
-
-    # Incremental permanent directories
-    os.makedirs('data/incremental/county/{}'.format(run_date))
-    os.makedirs('data/incremental/financial/stocks/{}'.format(run_date))
+    os.makedirs('tmp/incremental/county/{}'.format(ga_run_date))
