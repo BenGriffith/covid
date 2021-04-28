@@ -1,6 +1,8 @@
 import extract
 import utils
 import directories
+import shutil
+from pathlib import Path
 
 
 # Directory setup
@@ -8,17 +10,17 @@ directories.initial()
 
  
 # Extract Covid data
-extract.Texas(utils.tmp_county_path, "texas", "xlsx", "wb", utils.texas_url)
+extract.Texas(utils.tmp_county_path, "texas", "xlsx", "wb", None, utils.texas_url)
 extract.Florida(utils.tmp_county_path, "florida2020", "json", "w")
 extract.Florida(utils.tmp_county_path, "florida2021", "json", "w")
 extract.NewYork(utils.tmp_county_path, "new-york", "json", "w")
 extract.Pennsylvania(utils.tmp_county_path, "pennsylvania", "json", "w")
 extract.Illinois(utils.tmp_county_path, "illinois", "json", "w")
-extract.Ohio(utils.tmp_county_path, "ohio", "csv", "x", utils.ohio_url)
+extract.Ohio(utils.tmp_county_path, "ohio", "csv", "x", None, utils.ohio_url)
 extract.Georgia(utils.tmp_county_path, "georgia", "json", "w")
-extract.USAFacts(utils.tmp_county_path, "cases", "csv", "x", utils.cases_url)
-extract.USAFacts(utils.tmp_county_path, "deaths", "csv", "x", utils.deaths_url)
-extract.USAFacts(utils.tmp_county_path, "population", "csv", "x", utils.population_url)
+extract.USAFacts(utils.tmp_county_path, "cases", "csv", "x", None, utils.cases_url)
+extract.USAFacts(utils.tmp_county_path, "deaths", "csv", "x", None, utils.deaths_url)
+extract.USAFacts(utils.tmp_county_path, "population", "csv", "x", None, utils.population_url)
 
 
 # Extract Financial data
@@ -31,3 +33,12 @@ extract.Indicator(utils.tmp_indicator_path, "unemployment", "json", "w", utils.u
 extract.Indicator(utils.tmp_indicator_path, "sentiment", "json", "w", utils.consumer_sentiment_url, utils.headers_indicators, "Index of Consumer Sentiment - monthly")
 extract.Indicator(utils.tmp_indicator_path, "inflation", "json", "w", utils.inflation_url, utils.headers_indicators, "Consumer Price Index (CPI)")
 extract.Indicator(utils.tmp_indicator_path, "mortgage", "json", "w", utils.mortgage_url, utils.headers_indicators, "Housing affordability index")
+
+# Clean up directories
+path_tmp = Path("tmp")
+if path_tmp.exists() and path_tmp.is_dir():
+    shutil.rmtree(path_tmp)
+
+path_data = Path("data")
+if path_data.exists() and path_data.is_dir():
+    shutil.rmtree(path_data)
