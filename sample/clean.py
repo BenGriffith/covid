@@ -24,9 +24,10 @@ spark = SparkSession.builder.config("spark.jars.packages", "mysql:mysql-connecto
 
 class CleanAndStore:
 
-    def __init__(self, load, load_type, save_path):
+    def __init__(self, load, load_type, save_path, run_date=None):
         self.df = self.load_file(load, load_type)
         self.save_path = save_path
+        self.run_date = run_date
 
     def download_blob(self, load):
         """
@@ -114,14 +115,14 @@ class CleanAndStore:
             
             return df
 
-    def save_file(self, option, name, ext):
+    def save_file(self, name, ext):
         """ 
         1. Create parquet files
         2. Loop through parquet files
         3. Upload each parquet file to Azure blob
         """
 
-        save_path = f"{self.save_path}/{option}/{name}"
+        save_path = f"{self.save_path}/{name}"
 
         # Create parquet files
         self.df.write.parquet(save_path)
@@ -132,7 +133,7 @@ class CleanAndStore:
         for temp_file in temp_path.glob("*.parquet"):
 
             # Establish connection
-            blob = BlobClient.from_connection_string(conn_str=utils.connection_string, container_name=utils.container_name, blob_name=f"{self.save_path}/{option}/{temp_file.parent.stem}/{temp_file.stem}{temp_file.suffix}") 
+            blob = BlobClient.from_connection_string(conn_str=utils.connection_string, container_name=utils.container_name, blob_name=f"{self.save_path}/{temp_file.parent.stem}/{temp_file.stem}{temp_file.suffix}") 
 
             # Upload parquet file to blob
             with open(temp_file, "rb") as file:
@@ -170,10 +171,8 @@ class CleanAndStore:
             # Output to log
             log.logging.info(f"CONNECTION ERROR: {err}")
 
-    def create_final_covid_df(self):
+    def replace_county_name_with_id(self):
         
-        # Connection setup
-        # Pass cursor to function
         self.df = self.df.withColumn("county_id", self.get_county_id(col("county"), col("state")))
         self.df = self.df.select("date", "county_id", "new_cases").orderBy("date", "county_id")
 
@@ -192,8 +191,8 @@ class CleanAndStore:
 
 class Florida(CleanAndStore):
 
-    def __init__(self, load, load_type, save_path):
-        super().__init__(load, load_type, save_path)
+    def __init__(self, load, load_type, save_path, run_date):
+        super().__init__(load, load_type, save_path, run_date)
         self.year = load[-9:-5]
         self.wrangle()
 
@@ -217,19 +216,20 @@ class Florida(CleanAndStore):
         self.df = self.df.filter(self.df.county != "UNKNOWN")
 
         # Write preprocessed
-        super().save_file("preprocessed", f"florida-{self.year}", "parquet")
+        super().save_file(f"florida{self.year}", "parquet")
 
         self.df = self.df.select("date", "county", "state", "case").groupBy("date", "county", "state").agg(count("case").cast("int").alias("new_cases")).orderBy("date", "county")
 
-        super().create_final_covid_df()
+        super().replace_county_name_with_id()
 
         # Write to MySQL
         super().write_to_mysql("cases")
 
 class Texas(CleanAndStore):
 
-    def __init__(self, load, save_path):
+    def __init__(self, load, save_path, run_date):
         self.save_path = save_path
+        self.run_date = run_date
         self.columns = []
         self.set_column_names(load)
         super().load_excel(load, 2, self.columns)
@@ -308,12 +308,18 @@ class Texas(CleanAndStore):
 
         self.df = self.df.withColumn("new_cases", (self.df.case_total - self.df.previous_day))
 
+        if self.run_date == None:
+
+            self.df = self.df.select("date", "county", "state", "new_cases")
+
+        else:
+
+            self.df = self.df.select("date", "county", "state", "new_cases").filter(self.df.date == self.run_date)
+
         # Write preprocessed
-        super().save_file("preprocessed", "texas", "parquet")
+        super().save_file("texas", "parquet")
 
-        self.df = self.df.select("date", "county", "state", "new_cases")
-
-        super().create_final_covid_df()
+        super().replace_county_name_with_id()
         
         # Write to MySQL
         super().write_to_mysql("cases")
@@ -321,8 +327,8 @@ class Texas(CleanAndStore):
 
 class NewYork(CleanAndStore):
     
-    def __init__(self, load, load_type, save_path):
-        super().__init__(load, load_type, save_path)
+    def __init__(self, load, load_type, save_path, run_date):
+        super().__init__(load, load_type, save_path, run_date)
         self.wrangle()
 
     def wrangle(self):
@@ -342,19 +348,19 @@ class NewYork(CleanAndStore):
         self.df = self.df.filter("county != 'UNKNOWN'")
 
         # Write preprocessed
-        super().save_file("preprocessed", "new-york", "parquet")
+        super().save_file("new-york", "parquet")
 
         self.df = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
 
-        super().create_final_covid_df()
+        super().replace_county_name_with_id()
 
         # Write to MySQL
         super().write_to_mysql("cases")
 
 class Pennsylvania(CleanAndStore):
 
-    def __init__(self, load, load_type, save_path):
-        super().__init__(load, load_type, save_path)
+    def __init__(self, load, load_type, save_path, run_date):
+        super().__init__(load, load_type, save_path, run_date)
         #self.wrangle()
 
     def wrangle(self):
@@ -380,19 +386,19 @@ class Pennsylvania(CleanAndStore):
         self.df = self.df.filter(self.df.county != "UNKNOWN")
 
         # Write preprocessed
-        super().save_file("preprocessed", "pennsylvania", "parquet")
+        super().save_file("pennsylvania", "parquet")
 
         self.df = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
 
-        super().create_final_covid_df()
+        super().replace_county_name_with_id()
 
         # Write to MySQL
         super().write_to_mysql("cases")
 
 class Illinois(CleanAndStore):
 
-    def __init__(self, load, load_type, save_path):
-        super().__init__(load, load_type, save_path)
+    def __init__(self, load, load_type, save_path, run_date):
+        super().__init__(load, load_type, save_path, run_date)
         self.wrangle()
 
     def wrangle(self):
@@ -417,21 +423,27 @@ class Illinois(CleanAndStore):
         self.df = self.df.withColumn("previous_day", lag("case_total", 1).over(windowSpec))
 
         self.df = self.df.withColumn("new_cases", (self.df.case_total - self.df.previous_day))
+
+        if self.run_date == None:
+
+            self.df = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
+
+        else:
+
+            self.df = self.df.select("date", "county", "state", "new_cases").filter(self.df.date == self.run_date).orderBy("date", "county")
         
         # Write preprocessed
-        super().save_file("preprocessed", "illinois", "parquet")
+        super().save_file("illinois", "parquet")
 
-        self.df = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
-
-        super().create_final_covid_df()
+        super().replace_county_name_with_id()
 
         # Write to MySQL
         super().write_to_mysql("cases")
 
 class Ohio(CleanAndStore):
     
-    def __init__(self, load, load_type, save_path):
-        super().__init__(load, load_type, save_path)
+    def __init__(self, load, load_type, save_path, run_date):
+        super().__init__(load, load_type, save_path, run_date)
         self.wrangle()
 
     def wrangle(self):
@@ -453,20 +465,26 @@ class Ohio(CleanAndStore):
 
         self.df = self.df.filter("County != 'UNKNOWN'")
 
+        if self.run_date == None:
+
+            self.df = self.df.select("date", "county", "state", "case").groupBy("date", "county", "state").agg(count("case").cast("int").alias("new_cases")).filter(self.df.date == self.run_date).orderBy("date", "county")
+
+        else:
+
+            self.df = self.df.select("date", "county", "state", "case").groupBy("date", "county", "state").agg(count("case").cast("int").alias("new_cases")).filter(self.df.date == self.run_date).orderBy("date", "county")
+
         # Write preprocessed
-        super().save_file("preprocessed", "ohio", "parquet")
+        super().save_file("ohio", "parquet")
 
-        self.df = self.df.select("date", "county", "state", "case").groupBy("date", "county", "state").agg(count("case").cast("int").alias("new_cases")).orderBy("date", "county")
-
-        super().create_final_covid_df()
+        super().replace_county_name_with_id()
 
         # Write to MySQL
         super().write_to_mysql("cases")
 
 class Georgia(CleanAndStore):
 
-    def __init__(self, load, load_type, save_path):
-        super().__init__(load, load_type, save_path)
+    def __init__(self, load, load_type, save_path, run_date):
+        super().__init__(load, load_type, save_path, run_date)
         self.wrangle()
 
     def wrangle(self):
@@ -481,61 +499,102 @@ class Georgia(CleanAndStore):
         self.df = self.df.withColumn("date", col("DATESTAMP").cast("string"))
         self.df = self.df.drop("DATESTAMP")
 
-        self.df = self.df.select(col("CNTY_FIPS").cast("int").alias("county_fips"),
-                                upper(col("COUNTY")).alias("county"),
-                                to_date(from_unixtime(col("date")[1:10])).alias("date"),
-                                col("C_Age_0").cast("int").alias("cases_age_0"),
-                                col("C_Age_0_4").cast("int").alias("cases_age_0_4"),
-                                col("C_Age_15_24").cast("int").alias("cases_age_15_24"),
-                                col("C_Age_20").cast("int").alias("cases_age_20"),
-                                col("C_Age_25_34").cast("int").alias("cases_age_25_34"),
-                                col("C_Age_35_44").cast("int").alias("cases_age_35_44"),
-                                col("C_Age_45_54").cast("int").alias("cases_age_45_54"),
-                                col("C_Age_55_64").cast("int").alias("cases_age_55_64"),
-                                col("C_Age_5_14").cast("int").alias("cases_age_5_14"),
-                                col("C_Age_65_74").cast("int").alias("cases_age_65_74"),
-                                col("C_Age_75_84").cast("int").alias("cases_age_75_84"),
-                                col("C_Age_85plus").cast("int").alias("cases_age_85plus"),
-                                col("C_Age_Unkn").cast("int").alias("cases_age_unknown"),
-                                col("C_Cum").cast("int").alias("cases_cumulative"),
-                                col("C_EthUnk").cast("int").alias("cases_ethnicity_unknown"),
-                                col("C_Female").cast("int").alias("cases_female"),
-                                col("C_His").cast("int").alias("cases_hispanic"),
-                                col("C_Male").cast("int").alias("cases_male"),
-                                col("C_New").cast("int").alias("new_cases"),
-                                col("C_NonHis").cast("int").alias("cases_nonhispanic"),
-                                col("C_RaceAs").cast("int").alias("cases_asian"),
-                                col("C_RaceBl").cast("int").alias("cases_black"),
-                                col("C_RaceOth").cast("int").alias("cases_other"),
-                                col("C_RaceUnk").cast("int").alias("cases_unknown"),
-                                col("C_RaceWh").cast("int").alias("cases_white"),
-                                col("C_SexUnkn").cast("int").alias("cases_sex_unknown"),
-                                col("C_UCon_No").cast("int").alias("cases_condition_no"),
-                                col("C_UCon_Unk").cast("int").alias("cases_condition_unknown"),
-                                col("C_UCon_Yes").cast("int").alias("cases_condition_yes"),
-                                col("D_Cum").cast("int").alias("deaths_cumulative"),
-                                col("D_New").cast("int").alias("deaths_new"),
-                                col("H_Cum").cast("int").alias("hospital_cumulative"),
-                                col("H_New").cast("int").alias("hospital_new")).distinct().orderBy("date")
+        if self.run_date == None:
+
+            self.df = self.df.select(col("CNTY_FIPS").cast("int").alias("county_fips"),
+                                    upper(col("COUNTY")).alias("county"),
+                                    to_date(from_unixtime(col("date")[1:10])).alias("date"),
+                                    col("C_Age_0").cast("int").alias("cases_age_0"),
+                                    col("C_Age_0_4").cast("int").alias("cases_age_0_4"),
+                                    col("C_Age_15_24").cast("int").alias("cases_age_15_24"),
+                                    col("C_Age_20").cast("int").alias("cases_age_20"),
+                                    col("C_Age_25_34").cast("int").alias("cases_age_25_34"),
+                                    col("C_Age_35_44").cast("int").alias("cases_age_35_44"),
+                                    col("C_Age_45_54").cast("int").alias("cases_age_45_54"),
+                                    col("C_Age_55_64").cast("int").alias("cases_age_55_64"),
+                                    col("C_Age_5_14").cast("int").alias("cases_age_5_14"),
+                                    col("C_Age_65_74").cast("int").alias("cases_age_65_74"),
+                                    col("C_Age_75_84").cast("int").alias("cases_age_75_84"),
+                                    col("C_Age_85plus").cast("int").alias("cases_age_85plus"),
+                                    col("C_Age_Unkn").cast("int").alias("cases_age_unknown"),
+                                    col("C_Cum").cast("int").alias("cases_cumulative"),
+                                    col("C_EthUnk").cast("int").alias("cases_ethnicity_unknown"),
+                                    col("C_Female").cast("int").alias("cases_female"),
+                                    col("C_His").cast("int").alias("cases_hispanic"),
+                                    col("C_Male").cast("int").alias("cases_male"),
+                                    col("C_New").cast("int").alias("new_cases"),
+                                    col("C_NonHis").cast("int").alias("cases_nonhispanic"),
+                                    col("C_RaceAs").cast("int").alias("cases_asian"),
+                                    col("C_RaceBl").cast("int").alias("cases_black"),
+                                    col("C_RaceOth").cast("int").alias("cases_other"),
+                                    col("C_RaceUnk").cast("int").alias("cases_unknown"),
+                                    col("C_RaceWh").cast("int").alias("cases_white"),
+                                    col("C_SexUnkn").cast("int").alias("cases_sex_unknown"),
+                                    col("C_UCon_No").cast("int").alias("cases_condition_no"),
+                                    col("C_UCon_Unk").cast("int").alias("cases_condition_unknown"),
+                                    col("C_UCon_Yes").cast("int").alias("cases_condition_yes"),
+                                    col("D_Cum").cast("int").alias("deaths_cumulative"),
+                                    col("D_New").cast("int").alias("deaths_new"),
+                                    col("H_Cum").cast("int").alias("hospital_cumulative"),
+                                    col("H_New").cast("int").alias("hospital_new")).distinct().orderBy("date")
+
+        else:
+
+            self.df = self.df.select(col("CNTY_FIPS").cast("int").alias("county_fips"),
+                                    upper(col("COUNTY")).alias("county"),
+                                    to_date(from_unixtime(col("date")[1:10])).alias("date"),
+                                    col("C_Age_0").cast("int").alias("cases_age_0"),
+                                    col("C_Age_0_4").cast("int").alias("cases_age_0_4"),
+                                    col("C_Age_15_24").cast("int").alias("cases_age_15_24"),
+                                    col("C_Age_20").cast("int").alias("cases_age_20"),
+                                    col("C_Age_25_34").cast("int").alias("cases_age_25_34"),
+                                    col("C_Age_35_44").cast("int").alias("cases_age_35_44"),
+                                    col("C_Age_45_54").cast("int").alias("cases_age_45_54"),
+                                    col("C_Age_55_64").cast("int").alias("cases_age_55_64"),
+                                    col("C_Age_5_14").cast("int").alias("cases_age_5_14"),
+                                    col("C_Age_65_74").cast("int").alias("cases_age_65_74"),
+                                    col("C_Age_75_84").cast("int").alias("cases_age_75_84"),
+                                    col("C_Age_85plus").cast("int").alias("cases_age_85plus"),
+                                    col("C_Age_Unkn").cast("int").alias("cases_age_unknown"),
+                                    col("C_Cum").cast("int").alias("cases_cumulative"),
+                                    col("C_EthUnk").cast("int").alias("cases_ethnicity_unknown"),
+                                    col("C_Female").cast("int").alias("cases_female"),
+                                    col("C_His").cast("int").alias("cases_hispanic"),
+                                    col("C_Male").cast("int").alias("cases_male"),
+                                    col("C_New").cast("int").alias("new_cases"),
+                                    col("C_NonHis").cast("int").alias("cases_nonhispanic"),
+                                    col("C_RaceAs").cast("int").alias("cases_asian"),
+                                    col("C_RaceBl").cast("int").alias("cases_black"),
+                                    col("C_RaceOth").cast("int").alias("cases_other"),
+                                    col("C_RaceUnk").cast("int").alias("cases_unknown"),
+                                    col("C_RaceWh").cast("int").alias("cases_white"),
+                                    col("C_SexUnkn").cast("int").alias("cases_sex_unknown"),
+                                    col("C_UCon_No").cast("int").alias("cases_condition_no"),
+                                    col("C_UCon_Unk").cast("int").alias("cases_condition_unknown"),
+                                    col("C_UCon_Yes").cast("int").alias("cases_condition_yes"),
+                                    col("D_Cum").cast("int").alias("deaths_cumulative"),
+                                    col("D_New").cast("int").alias("deaths_new"),
+                                    col("H_Cum").cast("int").alias("hospital_cumulative"),
+                                    col("H_New").cast("int").alias("hospital_new")).filter(to_date(self.df.date) == self.run_date).orderBy("date")
 
         self.df = self.df.withColumn("state", lit("GA"))
 
         self.df = self.df.filter("county != 'UNKNOWN'")
 
         # Write preprocessed
-        super().save_file("preprocessed", "georgia", "parquet")        
+        super().save_file("georgia", "parquet")        
 
         self.df = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
 
-        super().create_final_covid_df()
+        super().replace_county_name_with_id()
 
         # Write to MySQL
         super().write_to_mysql("cases")
 
 class Cases(CleanAndStore):
 
-    def __init__(self, load, load_type, save_path):
-        super().__init__(load, load_type, save_path)
+    def __init__(self, load, load_type, save_path, run_date):
+        super().__init__(load, load_type, save_path, run_date)
         self.columns = []
         self.set_column_names()
         self.wrangle()
@@ -629,26 +688,32 @@ class Cases(CleanAndStore):
                                 to_date(col("Date")).alias("date"),
                                 col("Cases").cast("int").alias("case_total")).filter("state NOT IN ('FL', 'TX', 'NY', 'PA', 'OH', 'GA')").distinct()
 
-        # Write preprocessed
-        super().save_file("preprocessed", "cases", "parquet")  
-
         windowSpec = Window.partitionBy("county", "state").orderBy("date")
 
         self.df = self.df.withColumn("previous_day", lag("case_total", 1).over(windowSpec))
 
         self.df = self.df.withColumn("new_cases", (self.df.case_total - self.df.previous_day))    
 
-        self.df = self.df.select("date", "county", "state", "new_cases")                  
+        if self.run_date == None:
+        
+            self.df = self.df.select("date", "county", "state", "new_cases")                  
 
-        super().create_final_covid_df()
+        else:
+
+            self.df = self.df.select("date", "county", "state", "new_cases").filter(self.df.date == self.run_date)            
+
+        # Write preprocessed
+        super().save_file("cases", "parquet") 
+
+        super().replace_county_name_with_id()
 
         # Write to MySQL
         super().write_to_mysql("cases")
 
 class Deaths(CleanAndStore):
 
-    def __init__(self, load, load_type, save_path):
-        super().__init__(load, load_type, save_path)
+    def __init__(self, load, load_type, save_path, run_date):
+        super().__init__(load, load_type, save_path, run_date)
         self.columns = []
         self.set_column_names()
         self.wrangle()
@@ -743,18 +808,24 @@ class Deaths(CleanAndStore):
                                 to_date(col("Date")).alias("date"),
                                 col("Deaths").cast("int").alias("death_total")).distinct()
 
-        # Write preprocessed
-        super().save_file("preprocessed", "deaths", "parquet")   
-
         windowSpec = Window.partitionBy("county", "state").orderBy("date")
 
         self.df = self.df.withColumn("previous_day", lag("death_total", 1).over(windowSpec))
 
-        self.df = self.df.withColumn("new_deaths", (self.df.death_total - self.df.previous_day))         
+        self.df = self.df.withColumn("new_deaths", (self.df.death_total - self.df.previous_day))     
 
-        self.df = self.df.select("date", "county", "state", "new_deaths")
+        if self.run_date == None:    
 
-        super().create_final_covid_df()
+            self.df = self.df.select("date", "county", "state", "new_deaths")
+
+        else:
+
+            self.df = self.df.select("date", "county", "state", "new_deaths").filter(self.df.date == self.run_date)
+
+        # Write preprocessed
+        super().save_file("deaths", "parquet") 
+
+        super().replace_county_name_with_id()
 
         # Write to MySQL
         super().write_to_mysql("deaths")

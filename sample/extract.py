@@ -5,7 +5,6 @@ import json
 import warnings
 import logging
 import utils
-import shutil
 import pandas as pd
 from bs4 import BeautifulSoup
 from logs import log
@@ -15,11 +14,12 @@ warnings.filterwarnings("ignore")
 
 class CovidData:
 
-    def __init__(self, path, name, ext, mode):
+    def __init__(self, path, name, ext, mode, run_date=None):
         self.path = path
         self.name = name
         self.ext = ext
         self.mode = mode
+        self.run_date = run_date
 
     def get_response(self, url):
         """
@@ -36,10 +36,17 @@ class CovidData:
         """
         File creation
         """
-            
-        file = open(f"{self.path}/{self.name}.{self.ext}", self.mode)
-        file.write(response_type)
-        file.close()
+        
+        if self.run_date == None:
+
+            file = open(f"{self.path}/{self.name}.{self.ext}", self.mode)
+            file.write(response_type)
+            file.close()
+        else:
+
+            file = open(f"{self.path}/{self.run_date}/{self.name}.{self.ext}", self.mode)
+            file.write(response_type)
+            file.close()
         
         # Output to log
         log.logging.info("{}.{} file created for {}".format(self.name, self.ext, type(self).__name__))
@@ -49,23 +56,31 @@ class CovidData:
         Uploading file to Azure Blob storage
         """
 
-        blob = BlobClient.from_connection_string(conn_str=utils.connection_string, container_name=utils.container_name, blob_name=f"{self.path}/{self.name}.{self.ext}") 
+        if self.run_date == None:
 
-        with open(f"{self.path}/{self.name}.{self.ext}", "rb") as data:
-           blob.upload_blob(data)
+            blob = BlobClient.from_connection_string(conn_str=utils.connection_string, container_name=utils.container_name, blob_name=f"{self.path}/{self.name}.{self.ext}") 
+
+            with open(f"{self.path}/{self.name}.{self.ext}", "rb") as data:
+                blob.upload_blob(data)
+        else:
+
+            blob = BlobClient.from_connection_string(conn_str=utils.connection_string, container_name=utils.container_name, blob_name=f"{self.path}/{self.name}.{self.ext}") 
+
+            with open(f"{self.path}/{self.run_date}/{self.name}.{self.ext}", "rb") as data:
+                blob.upload_blob(data)
 
 class Texas(CovidData):
 
-    def __init__(self, path, name, ext, mode, url):
-        super().__init__(path, name, ext, mode)
+    def __init__(self, path, name, ext, mode, run_date, url):
+        super().__init__(path, name, ext, mode, run_date)
         super().get_response(url) 
         super().create_file(self.response.content)
         super().upload_blob()
 
 class Florida(CovidData):
 
-    def __init__(self, path, name, ext, mode):
-        super().__init__(path, name, ext, mode)
+    def __init__(self, path, name, ext, mode, run_date):
+        super().__init__(path, name, ext, mode, run_date)
         self.offset = 0
         self.limit = 2000
         self.counter = 1
@@ -79,48 +94,73 @@ class Florida(CovidData):
         Submit Florida API request, add data to list, increase offset for pagination in next API request
         """
 
-        while True:
+        if self.run_date == None:
 
-            url = "https://services1.arcgis.com/CY1LXxl9zlJeBuRZ/arcgis/rest/services/Case_Data_{}/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&resultOffset={}&resultRecordCount={}&f=json".format(self.name[-4:], self.offset, self.limit)
+            while True:
+
+                url = "https://services1.arcgis.com/CY1LXxl9zlJeBuRZ/arcgis/rest/services/Case_Data_{}/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&resultOffset={}&resultRecordCount={}&f=json".format(self.name[-4:], self.offset, self.limit)
+                response = requests.get(url)
+
+                # Output to log
+                log.logging.info("Request-Response {} submitted for {} with status code of {}".format(self.counter, type(self).__name__, response.status_code))
+
+                # If API response returns data add it to list
+                # If API response does not return any data break the loop construct
+                if response.json()["features"]:
+                    
+                    current_response_data = [feature["attributes"] for feature in response.json()["features"]]
+                    
+                    for row in current_response_data:
+                        self.data_fl.append(row)
+
+                else:
+                    break
+                
+                # Increase offset for pagination purposes
+                self.offset += self.limit
+                self.counter += 1
+
+                # Pause program before submitting next API request
+                time.sleep(15)
+        else:
+
+            url = f"https://services1.arcgis.com/CY1LXxl9zlJeBuRZ/arcgis/rest/services/Case_Data_2021/FeatureServer/0/query?where=EventDate%20%3E%3D%20TIMESTAMP%20'{run_date}%2000%3A00%3A00'%20AND%20EventDate%20%3C%3D%20TIMESTAMP%20'{run_date}%2000%3A00%3A00'&outFields=*&outSR=4326&f=json"
             response = requests.get(url)
-
+                            
             # Output to log
-            log.logging.info("Request-Response {} submitted for {} with status code of {}".format(self.counter, type(self).__name__, response.status_code))
+            log.logging.info("Request-Response submitted for {} with status code of {}".format(type(self).__name__, response.status_code))
 
-            # If API response returns data add it to list
-            # If API response does not return any data break the loop construct
-            if response.json()["features"]:
-                
-                current_response_data = [feature["attributes"] for feature in response.json()["features"]]
-                
+            current_response_data = [feature['attributes'] for feature in response.json()['features']]
+
+            if current_response_data:
                 for row in current_response_data:
                     self.data_fl.append(row)
-
-            else:
-                break
-            
-            # Increase offset for pagination purposes
-            self.offset += self.limit
-            self.counter += 1
-
-            # Pause program before submitting next API request
-            time.sleep(5)
 
     def create_file(self):
         """ 
         Creat JSON file for Florida
         """
 
-        with open("{}/{}.{}".format(self.path, self.name, self.ext), self.mode) as florida_file:
-            json.dump(self.data_fl, florida_file)
+        if self.run_date == None:
 
-        # Output to log
-        log.logging.info("{}.{} file created for {}".format(self.name, self.ext, type(self).__name__))
+            with open("{}/{}.{}".format(self.path, self.name, self.ext), self.mode) as florida_file:
+                json.dump(self.data_fl, florida_file)
+
+            # Output to log
+            log.logging.info("{}.{} file created for {}".format(self.name, self.ext, type(self).__name__))
+
+        else:
+
+            with open("{}/{}/{}.{}".format(self.path, self.run_date, self.name, self.ext), self.mode) as florida_file:
+                json.dump(self.data_fl, florida_file)
+
+            # Output to log
+            log.logging.info("{}.{} file created for {}".format(self.name, self.ext, type(self).__name__))
 
 class NewYork(CovidData):
 
-    def __init__(self, path, name, ext, mode):
-        super().__init__(path, name, ext, mode)
+    def __init__(self, path, name, ext, mode, run_date):
+        super().__init__(path, name, ext, mode, run_date)
         self.offset = 0
         self.limit = 2000
         self.counter = 1
@@ -134,45 +174,69 @@ class NewYork(CovidData):
         Submit New York API request, add data to list, increase offset for pagination in next API request
         """
 
-        while True:
+        if self.run_date == None:
 
-            # Submit API request
-            url = "https://health.data.ny.gov/resource/xdss-u53e.json?$limit={}&$offset={}".format(self.limit, self.offset)
+            while True:
+
+                # Submit API request
+                url = "https://health.data.ny.gov/resource/xdss-u53e.json?$limit={}&$offset={}".format(self.limit, self.offset)
+                response = requests.get(url)
+
+                # Output to log
+                log.logging.info("Request-Response {} submitted for {} with status code of {}".format(self.counter, type(self).__name__, response.status_code))
+                
+                # If API response returns data add it to list
+                # If API response does not return any data break the loop construct
+                if response.text.strip() != "[]":
+                    for row in response.json():
+                        self.data_ny.append(row)
+                else:
+                    break
+                
+                # Increase offset for pagination purposes
+                self.offset += self.limit
+                self.counter += 1
+
+                # Pause program before submitting next API request
+                time.sleep(15)
+
+        else:
+
+            url = f'https://health.data.ny.gov/resource/xdss-u53e.json?test_date={run_date}'
             response = requests.get(url)
 
             # Output to log
-            log.logging.info("Request-Response {} submitted for {} with status code of {}".format(self.counter, type(self).__name__, response.status_code))
-            
-            # If API response returns data add it to list
-            # If API response does not return any data break the loop construct
-            if response.text.strip() != "[]":
+            log.logging.info("Request-Response submitted for {} with status code of {}".format(type(self).__name__, response.status_code))
+
+            if response.text.strip() != '[]':
                 for row in response.json():
                     self.data_ny.append(row)
-            else:
-                break
-            
-            # Increase offset for pagination purposes
-            self.offset += self.limit
-            self.counter += 1
-
-            # Pause program before submitting next API request
-            time.sleep(15)
 
     def create_file(self):
         """ 
         Create JSON file for New York
         """
 
-        with open("{}/{}.{}".format(self.path, self.name, self.ext), self.mode) as new_york_file:
-            json.dump(self.data_ny, new_york_file)
+        if self.run_date == None:
 
-        # Output to log
-        log.logging.info("{}.{} file created for {}".format(self.name, self.ext, type(self).__name__))
+            with open("{}/{}.{}".format(self.path, self.name, self.ext), self.mode) as new_york_file:
+                json.dump(self.data_ny, new_york_file)
+
+            # Output to log
+            log.logging.info("{}.{} file created for {}".format(self.name, self.ext, type(self).__name__))
+
+        else:
+
+            with open("{}/{}/{}.{}".format(self.path, self.run_date, self.name, self.ext), self.mode) as new_york_file:
+                json.dump(self.data_ny, new_york_file)
+
+            # Output to log
+            log.logging.info("{}.{} file created for {}".format(self.name, self.ext, type(self).__name__))
 
 class Pennsylvania(CovidData):
 
-    def __init__(self, path, name, ext, mode):
-        super().__init__(path, name, ext, mode)
+    def __init__(self, path, name, ext, mode, run_date):
+        super().__init__(path, name, ext, mode, run_date)
         self.offset = 0
         self.limit = 2000
         self.counter = 1
@@ -186,45 +250,69 @@ class Pennsylvania(CovidData):
         Submit Pennsylvania API request, add data to list, increase offset for pagination in next API request
         """
         
-        while True:
+        if self.run_date == None:
 
-            # Submit API request
-            url = "https://data.pa.gov/resource/j72v-r42c.json?$limit={}&$offset={}".format(self.limit, self.offset)
+            while True:
+
+                # Submit API request
+                url = "https://data.pa.gov/resource/j72v-r42c.json?$limit={}&$offset={}".format(self.limit, self.offset)
+                response = requests.get(url)
+
+                # Output to log
+                log.logging.info("Request-Response {} submitted for {} with status code of {}".format(self.counter, type(self).__name__, response.status_code))
+                
+                # If API response returns data add it to list
+                # If API response does not return any data break the loop construct
+                if response.text.strip() != "[]":
+                    for row in response.json():
+                        self.data_pa.append(row)
+                else:
+                    break
+                
+                # Increase offset for pagination purposes
+                self.offset += self.limit
+                self.counter += 1
+
+                # Pause program before submitting next API request
+                time.sleep(15)
+
+        else:
+
+            url = f'https://data.pa.gov/resource/j72v-r42c.json?date={run_date}'
             response = requests.get(url)
 
             # Output to log
-            log.logging.info("Request-Response {} submitted for {} with status code of {}".format(self.counter, type(self).__name__, response.status_code))
-            
-            # If API response returns data add it to list
-            # If API response does not return any data break the loop construct
-            if response.text.strip() != "[]":
+            log.logging.info("Request-Response submitted for {} with status code of {}".format(type(self).__name__, response.status_code))
+
+            if response.text.strip() != '[]':
                 for row in response.json():
                     self.data_pa.append(row)
-            else:
-                break
-            
-            # Increase offset for pagination purposes
-            self.offset += self.limit
-            self.counter += 1
-
-            # Pause program before submitting next API request
-            time.sleep(15)
 
     def create_file(self):
         """
         Create JSON file for Pennsylvania
         """
 
-        with open("{}/{}.{}".format(self.path, self.name, self.ext), self.mode) as penn_file:
-            json.dump(self.data_pa, penn_file)
+        if self.run_date == None:
 
-        # Output to log
-        log.logging.info("{}.{} file created for {}".format(self.name, self.ext, type(self).__name__))
+            with open("{}/{}.{}".format(self.path, self.name, self.ext), self.mode) as penn_file:
+                json.dump(self.data_pa, penn_file)
+
+            # Output to log
+            log.logging.info("{}.{} file created for {}".format(self.name, self.ext, type(self).__name__))
+
+        else:
+
+            with open("{}/{}/{}.{}".format(self.path, self.run_date, self.name, self.ext), self.mode) as penn_file:
+                json.dump(self.data_pa, penn_file)
+
+            # Output to log
+            log.logging.info("{}.{} file created for {}".format(self.name, self.ext, type(self).__name__))
 
 class Illinois(CovidData):
 
-    def __init__(self, path, name, ext, mode):
-        super().__init__(path, name, ext, mode)
+    def __init__(self, path, name, ext, mode, run_date):
+        super().__init__(path, name, ext, mode, run_date)
         self.data_il = []
         self.get_response()
         self.create_file()
@@ -261,31 +349,41 @@ class Illinois(CovidData):
                 self.data_il.append(row)
 
             # Pause program before submitting next API request
-            time.sleep(180)
+            time.sleep(120)
         
     def create_file(self):
         """
         Create JSON file for Illinois
         """
 
-        with open("{}/{}.{}".format(self.path, self.name, self.ext), self.mode) as illinois_file:
-            json.dump(self.data_il, illinois_file)
+        if self.run_date == None:
 
-        # Output to log
-        log.logging.info("{}.{} file created for {}".format(self.name, self.ext, type(self).__name__))
+            with open("{}/{}.{}".format(self.path, self.name, self.ext), self.mode) as illinois_file:
+                json.dump(self.data_il, illinois_file)
+
+            # Output to log
+            log.logging.info("{}.{} file created for {}".format(self.name, self.ext, type(self).__name__))
+
+        else:
+
+            with open("{}/{}/{}.{}".format(self.path, self.run_date, self.name, self.ext), self.mode) as illinois_file:
+                json.dump(self.data_il, illinois_file)
+
+            # Output to log
+            log.logging.info("{}.{} file created for {}".format(self.name, self.ext, type(self).__name__))
 
 class Ohio(CovidData):
 
-    def __init__(self, path, name, ext, mode, url):
-        super().__init__(path, name, ext, mode)
+    def __init__(self, path, name, ext, mode, run_date, url):
+        super().__init__(path, name, ext, mode, run_date)
         super().get_response(url)
         super().create_file(self.response.text)
         super().upload_blob()
 
 class Georgia(CovidData):
 
-    def __init__(self, path, name, ext, mode):
-        super().__init__(path, name, ext, mode)
+    def __init__(self, path, name, ext, mode, run_date):
+        super().__init__(path, name, ext, mode, run_date)
         self.offset = 0
         self.limit = 2000
         self.counter = 1
@@ -299,48 +397,71 @@ class Georgia(CovidData):
         Submit Georgia API request, add data to list, increase offset for pagination in next API request
         """
 
-        while True:
+        if self.run_date == None:
 
-            # Submit API request
-            url = "https://services7.arcgis.com/Za9Nk6CPIPbvR1t7/arcgis/rest/services/Georgia_PUI_Data_Download/FeatureServer/0/query?outFields=*&where=1%3D1&resultOffset={}&resultRecordCount={}&f=json".format(self.offset, self.limit)
+            while True:
+
+                # Submit API request
+                url = "https://services7.arcgis.com/Za9Nk6CPIPbvR1t7/arcgis/rest/services/Georgia_PUI_Data_Download/FeatureServer/0/query?outFields=*&where=1%3D1&resultOffset={}&resultRecordCount={}&f=json".format(self.offset, self.limit)
+                response = requests.get(url)
+
+                # Output to log
+                log.logging.info("Request-Response {} submitted for {} with status code of {}".format(self.counter, type(self).__name__, response.status_code))
+
+                # If API response returns data add it to list
+                # If API response does not return any data break the loop construct
+                if response.json()["features"]:
+                    
+                    current_response_data = [feature["attributes"] for feature in response.json()["features"]]
+                    
+                    for row in current_response_data:
+                        self.data_ga.append(row)
+                else:
+                    break
+                
+                # Increase offset for pagination purposes
+                self.offset += self.limit
+                self.counter += 1
+
+                # Pause program before submitting next API request
+                time.sleep(15)
+
+        else:
+
+            url = 'https://opendata.arcgis.com/datasets/d817e06e4b264905a075b9332cd41962_0.geojson'
             response = requests.get(url)
 
             # Output to log
-            log.logging.info("Request-Response {} submitted for {} with status code of {}".format(self.counter, type(self).__name__, response.status_code))
+            log.logging.info("Request-Response submitted for {} with status code of {}".format(type(self).__name__, response.status_code))
 
-            # If API response returns data add it to list
-            # If API response does not return any data break the loop construct
-            if response.json()["features"]:
-                
-                current_response_data = [feature["attributes"] for feature in response.json()["features"]]
-                
-                for row in current_response_data:
-                    self.data_ga.append(row)
-            else:
-                break
-            
-            # Increase offset for pagination purposes
-            self.offset += self.limit
-            self.counter += 1
-
-            # Pause program before submitting next API request
-            time.sleep(15)
+            for row in response.json()['features']:
+                self.data_ga.append(row['properties'])
 
     def create_file(self):
         """
         Create JSON file for Georgia
         """
 
-        with open("{}/{}.{}".format(self.path, self.name, self.ext), self.mode) as georgia_file:
-            json.dump(self.data_ga, georgia_file)
+        if self.run_date == None:
 
-        # Output to log
-        log.logging.info("{}.{} file created for {}".format(self.name, self.ext, type(self).__name__))
+            with open("{}/{}.{}".format(self.path, self.name, self.ext), self.mode) as georgia_file:
+                json.dump(self.data_ga, georgia_file)
+
+            # Output to log
+            log.logging.info("{}.{} file created for {}".format(self.name, self.ext, type(self).__name__))
+
+        else:
+
+            with open("{}/{}/{}.{}".format(self.path, self.run_date, self.name, self.ext), self.mode) as georgia_file:
+                json.dump(self.data_ga, georgia_file)
+
+            # Output to log
+            log.logging.info("{}.{} file created for {}".format(self.name, self.ext, type(self).__name__))
 
 class USAFacts(CovidData):
 
-    def __init__(self, path, name, ext, mode, url):
-        super().__init__(path, name, ext, mode)
+    def __init__(self, path, name, ext, mode, run_date, url):
+        super().__init__(path, name, ext, mode, run_date)
         super().get_response(url)
         super().create_file(self.response.text)
         super().upload_blob()
