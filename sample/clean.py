@@ -21,6 +21,9 @@ from pathlib import Path
 warnings.filterwarnings("ignore")
 
 spark = SparkSession.builder.config("spark.jars.packages", "mysql:mysql-connector-java:8.0.24").getOrCreate()
+spark.conf.set("spark.yarn.appMasterEnv.PYSPARK_PYTHON", "/usr/bin/anaconda/envs/py36booyah/bin/python3")
+spark.conf.set("spark.yarn.appMasterEnv.PYSPARK_DRIVER_PYTHON", "/usr/bin/anaconda/envs/py36booyah/bin/python3")
+spark.conf.set(f"fs.azure.account.key.{utils.storage_account}.blob.core.windows.net", utils.key)
 
 class CleanAndStore:
 
@@ -61,11 +64,7 @@ class CleanAndStore:
 
         if load_type == "csv":
 
-            # Retrieve file path from download_blob method
-            file_path = self.download_blob(load)
-
-            # Pass file path to load method
-            self.df = spark.read.format(load_type).option("header", True).load(file_path)
+            self.df = spark.read.format(load_type).option("header", True).load(f"wasbs://{utils.container_name}@{utils.storage_account}.blob.core.windows.net/{load}")
             
             # Output to log
             log.logging.info("{} file loaded for cleaning".format(load))
@@ -74,11 +73,7 @@ class CleanAndStore:
 
         elif load_type == "json":
 
-            # Retrieve file path from download_blob method
-            file_path = self.download_blob(load)
-
-            # Pass file path to load method
-            self.df = spark.read.format(load_type).load(file_path)
+            self.df = spark.read.format(load_type).option("header", True).load(f"wasbs://{utils.container_name}@{utils.storage_account}.blob.core.windows.net/{load}")
 
             # Output to log
             log.logging.info("{} file loaded for cleaning".format(load))
@@ -125,21 +120,21 @@ class CleanAndStore:
         save_path = f"{self.save_path}/{name}"
 
         # Create parquet files
-        self.df.write.parquet(save_path)
+        self.df.write.parquet(f'wasbs://{utils.container_name}@{utils.storage_account}.blob.core.windows.net/{self.save_path}/{name}')
 
-        temp_path = Path(save_path)
+        # temp_path = Path(save_path)
 
-        # Loop through created parquet files
-        for temp_file in temp_path.glob("*.parquet"):
+        # # Loop through created parquet files
+        # for temp_file in temp_path.glob("*.parquet"):
 
-            # Establish connection
-            blob = BlobClient.from_connection_string(conn_str=utils.connection_string, container_name=utils.container_name, blob_name=f"{self.save_path}/{temp_file.parent.stem}/{temp_file.stem}{temp_file.suffix}") 
+        #     # Establish connection
+        #     blob = BlobClient.from_connection_string(conn_str=utils.connection_string, container_name=utils.container_name, blob_name=f"{self.save_path}/{temp_file.parent.stem}/{temp_file.stem}{temp_file.suffix}") 
 
-            # Upload parquet file to blob
-            with open(temp_file, "rb") as file:
-                blob.upload_blob(file)
+        #     # Upload parquet file to blob
+        #     with open(temp_file, "rb") as file:
+        #         blob.upload_blob(file)
 
-        shutil.rmtree(temp_path)
+        # shutil.rmtree(temp_path)
 
         # Output to log
         log.logging.info(f"Cleaning and File Creation for {type(self).__name__} complete: {self.df.count()} records and {len(self.df.columns)} fields")
@@ -204,7 +199,7 @@ class Florida(CleanAndStore):
         self.df = self.df.select(col("Age").cast("int").alias("age"),
                                 when(col("Case_") == "Yes", 1).alias("case"),
                                 upper(col("Contact")).alias("contact"),
-                                upper(col("County")).alias("county"),
+                                when(upper(col("County")) == "DADE", "MIAMI-DADE").otherwise(self.df.County).alias("county"),
                                 upper(col("Died")).alias("died"),
                                 upper(col("EDvisit")).alias("ed_visit"),
                                 to_date(to_timestamp(from_unixtime(substring(col("EventDate").cast("string"), 1, 10)))).alias("date"),
@@ -376,6 +371,7 @@ class Pennsylvania(CleanAndStore):
                      col("cases_cume").cast("int").alias("cases_total"),
                      col("cases_cume_rate").cast("float").alias("cases_total_rate"), 
                      upper(col("county")).alias("county"), 
+                     when(upper(col("county")) == "PENNSYLVANIA", "PHILADELPHIA ").otherwise(self.df.county).alias("county"),
                      col("latitude").cast("float").alias("latitude"), 
                      col("longitude").cast("float").alias("longitude"), 
                      col("population").cast("int").alias("population"), 
@@ -494,7 +490,7 @@ class Georgia(CleanAndStore):
 
         self.df = self.df.drop("OBJECTID", "C_NEW_PERCT_CHG", "D_NEW_PERCT_CHG", "C_NEW_7D_MEAN", "D_NEW_7D_MEAN", "C_NEW_7D_PERCT_CHG", "D_NEW_7D_PERCT_CHG", "GlobalID")
         
-        self.df = self.df.filter("COUNTY != 'UNKNOWN'")
+        self.df = self.df.filter("COUNTY NOT IN ('UNKNOWN', 'ALL GEORGIA', 'NON-GEORGIA RESIDENT')")
 
         self.df = self.df.withColumn("date", col("DATESTAMP").cast("string"))
         self.df = self.df.drop("DATESTAMP")
