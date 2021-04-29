@@ -11,16 +11,16 @@ directories.initial()
  
 # Extract Covid data
 extract.Texas(utils.tmp_county_path, "texas", "xlsx", "wb", None, utils.texas_url)
-extract.Florida(utils.tmp_county_path, "florida2020", "json", "w")
-extract.Florida(utils.tmp_county_path, "florida2021", "json", "w")
-extract.NewYork(utils.tmp_county_path, "new-york", "json", "w")
-extract.Pennsylvania(utils.tmp_county_path, "pennsylvania", "json", "w")
-extract.Illinois(utils.tmp_county_path, "illinois", "json", "w")
+extract.Florida(utils.tmp_county_path, "florida2020", "json", "w", None)
+extract.Florida(utils.tmp_county_path, "florida2021", "json", "w", None)
+extract.NewYork(utils.tmp_county_path, "new-york", "json", "w", None)
+extract.Pennsylvania(utils.tmp_county_path, "pennsylvania", "json", "w", None)
+extract.Illinois(utils.tmp_county_path, "illinois", "json", "w", None)
 extract.Ohio(utils.tmp_county_path, "ohio", "csv", "x", None, utils.ohio_url)
-extract.Georgia(utils.tmp_county_path, "georgia", "json", "w")
-extract.USAFacts(utils.tmp_county_path, "cases", "csv", "x", None, utils.cases_url)
-extract.USAFacts(utils.tmp_county_path, "deaths", "csv", "x", None, utils.deaths_url)
-extract.USAFacts(utils.tmp_county_path, "population", "csv", "x", None, utils.population_url)
+extract.Georgia(utils.tmp_county_path, "georgia", "json", "w", None)
+extract.USAFacts(utils.tmp_county_path, "cases", "csv", "x", None, utils.cases_url, None)
+extract.USAFacts(utils.tmp_county_path, "deaths", "csv", "x", None, utils.deaths_url, None)
+extract.USAFacts(utils.tmp_county_path, "population", "csv", "x", None, utils.population_url, None)
 
 
 # Extract Financial data
