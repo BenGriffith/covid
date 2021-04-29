@@ -1,19 +1,22 @@
 import clean
-import utils
- 
-clean.Texas(f'{utils.tmp_county_path}/texas.xlsx', utils.county_path)
-clean.Florida(f'{utils.tmp_county_path}/florida2020.json', 'json', utils.county_path)
-clean.Florida(f'{utils.tmp_county_path}/florida2021.json', 'json', utils.county_path)
-clean.NewYork(f'{utils.tmp_county_path}/new-york.json', 'json', utils.county_path)
-clean.Pennsylvania(f'{utils.tmp_county_path}/pennsylvania.json', 'json', utils.county_path)
-clean.Illinois(f'{utils.tmp_county_path}/illinois.json', 'json', utils.county_path)
-clean.Ohio(f'{utils.tmp_county_path}/ohio.csv', 'csv', utils.county_path)
-clean.Georgia(f'{utils.tmp_county_path}/georgia.json', 'json', utils.county_path)
-clean.Cases(f'{utils.tmp_county_path}/cases.csv', 'csv', utils.county_path)
-clean.Deaths(f'{utils.tmp_county_path}/deaths.csv', 'csv', utils.county_path)
-clean.Population(f'{utils.tmp_county_path}/population.csv', 'csv', utils.county_path)
-clean.Stocks(utils.tmp_stock_path, utils.stock_path)
-clean.Indicator(f'{utils.tmp_indicator_path}/unemployment.json', 'json', utils.indicator_path, 'unemployment')
-clean.Indicator(f'{utils.tmp_indicator_path}/inflation.json', 'json', utils.indicator_path, 'inflation')
-clean.Indicator(f'{utils.tmp_indicator_path}/sentiment.json', 'json', utils.indicator_path, 'sentiment')
-clean.Indicator(f'{utils.tmp_indicator_path}/mortgage.json', 'json', utils.indicator_path, 'mortgage')
+
+# Populate county table
+clean.Population("tmp/initial/county/population.csv", "csv", "data/initial/county", 1)
+
+# Clean
+clean.Texas("tmp/initial/county/texas.xlsx", "data/initial/county", None)
+clean.Florida("tmp/initial/county/florida2020.json", "json", "data/initial/county", None)
+clean.Florida("tmp/initial/county/florida2021.json", "json", "data/initial/county", None)
+clean.NewYork("tmp/initial/county/new-york.json", "json", "data/initial/county", None)
+clean.Pennsylvania("tmp/initial/county/pennsylvania.json", "json", "data/initial/county", None)
+clean.Illinois("tmp/initial/county/illinois.json", "json", "data/initial/county", None)
+clean.Ohio("tmp/initial/county/ohio.csv", "csv", "data/initial/county", None)
+clean.Georgia("tmp/initial/county/georgia.json", "json", "data/initial/county", None)
+clean.Cases("tmp/initial/county/cases.csv", "csv", "data/initial/county", None)
+clean.Deaths("tmp/initial/county/deaths.csv", "csv", "data/initial/county", None)
+clean.Population("tmp/initial/county/population.csv", "csv", "data/initial/county", 0)
+clean.Stocks("tmp/initial/financial/stocks", "data/initial/financial/stocks")
+clean.Indicator("tmp/initial/financial/indicators/unemployment.json", "json", "data/initial/financial/indicators", "unemployment")
+clean.Indicator("tmp/initial/financial/indicators/inflation.json", "json", "data/initial/financial/indicators", "inflation")
+clean.Indicator("tmp/initial/financial/indicators/sentiment.json", "json", "data/initial/financial/indicators", "sentiment")
+clean.Indicator("tmp/initial/financial/indicators/mortgage.json", "json", "data/initial/financial/indicators", "mortgage")
