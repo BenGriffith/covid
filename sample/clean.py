@@ -112,29 +112,13 @@ class CleanAndStore:
 
     def save_file(self, name, ext):
         """ 
-        1. Create parquet files
-        2. Loop through parquet files
-        3. Upload each parquet file to Azure blob
+        1. Write parquet files to Azure blob
         """
 
         save_path = f"{self.save_path}/{name}"
 
         # Create parquet files
         self.df.write.parquet(f'wasbs://{utils.container_name}@{utils.storage_account}.blob.core.windows.net/{self.save_path}/{name}')
-
-        # temp_path = Path(save_path)
-
-        # # Loop through created parquet files
-        # for temp_file in temp_path.glob("*.parquet"):
-
-        #     # Establish connection
-        #     blob = BlobClient.from_connection_string(conn_str=utils.connection_string, container_name=utils.container_name, blob_name=f"{self.save_path}/{temp_file.parent.stem}/{temp_file.stem}{temp_file.suffix}") 
-
-        #     # Upload parquet file to blob
-        #     with open(temp_file, "rb") as file:
-        #         blob.upload_blob(file)
-
-        # shutil.rmtree(temp_path)
 
         # Output to log
         log.logging.info(f"Cleaning and File Creation for {type(self).__name__} complete: {self.df.count()} records and {len(self.df.columns)} fields")
@@ -370,8 +354,7 @@ class Pennsylvania(CleanAndStore):
                      col("cases_avg_new_rate").cast("float").alias("cases_avg_new_rate"), 
                      col("cases_cume").cast("int").alias("cases_total"),
                      col("cases_cume_rate").cast("float").alias("cases_total_rate"), 
-                     upper(col("county")).alias("county"), 
-                     when(upper(col("county")) == "PENNSYLVANIA", "PHILADELPHIA ").otherwise(self.df.county).alias("county"),
+                     when(upper(col("county")) == "PENNSYLVANIA", "PHILADELPHIA").otherwise(self.df.county).alias("county"),
                      col("latitude").cast("float").alias("latitude"), 
                      col("longitude").cast("float").alias("longitude"), 
                      col("population").cast("int").alias("population"), 
