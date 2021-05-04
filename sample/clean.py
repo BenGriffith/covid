@@ -31,35 +31,10 @@ class CleanAndStore:
         self.df = self.load_file(load, load_type)
         self.save_path = save_path
         self.run_date = run_date
-
-    def download_blob(self, load):
-        """
-        1. Download Azure Blob
-        2. Create tmp directory and file
-        3. Write Blob content to file
-        """
-
-        # Establish connection
-        blob_service_client = BlobServiceClient(account_url=utils.blob_url, credential=utils.key)
-
-        # Download blob
-        blob_client = blob_service_client.get_blob_client(container=utils.container_name, blob=load)
-        downloader = blob_client.download_blob()
-
-        # Create tmp directory and file
-        os.mkdir("tmp")
-        file_path = os.path.join("tmp", load[load.rfind("/")+1:])
-
-        # Write blob content to file
-        with open(file_path, "wb") as file:
-            file.write(blob_client.download_blob().readall())
-
-        return file_path
         
     def load_file(self, load, load_type):
         """
-        1. Retrieve file path from download_blob method
-        2. Pass file path to Spark load method
+        Retrieve CSV or JSON file from Azure
         """
 
         if load_type == "csv":
@@ -110,7 +85,7 @@ class CleanAndStore:
             
             return df
 
-    def save_file(self, name, ext):
+    def save_file(self, name):
         """ 
         1. Write parquet files to Azure blob
         """
@@ -118,7 +93,7 @@ class CleanAndStore:
         save_path = f"{self.save_path}/{name}"
 
         # Create parquet files
-        self.df.write.parquet(f'wasbs://{utils.container_name}@{utils.storage_account}.blob.core.windows.net/{self.save_path}/{name}')
+        self.df.write.parquet(f"wasbs://{utils.container_name}@{utils.storage_account}.blob.core.windows.net/{save_path}")
 
         # Output to log
         log.logging.info(f"Cleaning and File Creation for {type(self).__name__} complete: {self.df.count()} records and {len(self.df.columns)} fields")
@@ -153,20 +128,21 @@ class CleanAndStore:
     def replace_county_name_with_id(self):
         
         self.df = self.df.withColumn("county_id", self.get_county_id(col("county"), col("state")))
-        self.df = self.df.select("date", "county_id", "new_cases").orderBy("date", "county_id")
+        self.df = self.df.select("date", "county_id", "new_cases")
+
+        return self.df
 
     def write_to_mysql(self, table):
+        """
+        Write data to specified DB table
+        """
 
         self.df.write.format('jdbc').options(
             url=utils.db_url, 
             driver=utils.db_driver, 
             dbtable=table, 
             user=utils.db_user, 
-            password=utils.db_pw).mode("overwrite").save()
-
-        tmp_path = Path("tmp")
-        if tmp_path.exists() and tmp_path.is_dir():
-            shutil.rmtree(tmp_path)
+            password=utils.db_pw).mode("append").save()
 
 class Florida(CleanAndStore):
 
@@ -183,7 +159,7 @@ class Florida(CleanAndStore):
         self.df = self.df.select(col("Age").cast("int").alias("age"),
                                 when(col("Case_") == "Yes", 1).alias("case"),
                                 upper(col("Contact")).alias("contact"),
-                                when(upper(col("County")) == "DADE", "MIAMI-DADE").otherwise(self.df.County).alias("county"),
+                                when(upper(col("County")) == "DADE", "MIAMI-DADE").otherwise(upper(self.df.County)).alias("county"),
                                 upper(col("Died")).alias("died"),
                                 upper(col("EDvisit")).alias("ed_visit"),
                                 to_date(to_timestamp(from_unixtime(substring(col("EventDate").cast("string"), 1, 10)))).alias("date"),
@@ -195,7 +171,7 @@ class Florida(CleanAndStore):
         self.df = self.df.filter(self.df.county != "UNKNOWN")
 
         # Write preprocessed
-        super().save_file(f"florida{self.year}", "parquet")
+        super().save_file(f"florida{self.year}")
 
         self.df = self.df.select("date", "county", "state", "case").groupBy("date", "county", "state").agg(count("case").cast("int").alias("new_cases")).orderBy("date", "county")
 
@@ -295,9 +271,6 @@ class Texas(CleanAndStore):
 
             self.df = self.df.select("date", "county", "state", "new_cases").filter(self.df.date == self.run_date)
 
-        # Write preprocessed
-        super().save_file("texas", "parquet")
-
         super().replace_county_name_with_id()
         
         # Write to MySQL
@@ -326,9 +299,6 @@ class NewYork(CleanAndStore):
 
         self.df = self.df.filter("county != 'UNKNOWN'")
 
-        # Write preprocessed
-        super().save_file("new-york", "parquet")
-
         self.df = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
 
         super().replace_county_name_with_id()
@@ -354,7 +324,7 @@ class Pennsylvania(CleanAndStore):
                      col("cases_avg_new_rate").cast("float").alias("cases_avg_new_rate"), 
                      col("cases_cume").cast("int").alias("cases_total"),
                      col("cases_cume_rate").cast("float").alias("cases_total_rate"), 
-                     when(upper(col("county")) == "PENNSYLVANIA", "PHILADELPHIA").otherwise(self.df.county).alias("county"),
+                     when(upper(col("county")) == "PENNSYLVANIA", "PHILADELPHIA").otherwise(upper(self.df.county)).alias("county"),
                      col("latitude").cast("float").alias("latitude"), 
                      col("longitude").cast("float").alias("longitude"), 
                      col("population").cast("int").alias("population"), 
@@ -363,9 +333,6 @@ class Pennsylvania(CleanAndStore):
         self.df = self.df.withColumn("state", lit("PA"))
 
         self.df = self.df.filter(self.df.county != "UNKNOWN")
-
-        # Write preprocessed
-        super().save_file("pennsylvania", "parquet")
 
         self.df = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
 
@@ -410,9 +377,6 @@ class Illinois(CleanAndStore):
         else:
 
             self.df = self.df.select("date", "county", "state", "new_cases").filter(self.df.date == self.run_date).orderBy("date", "county")
-        
-        # Write preprocessed
-        super().save_file("illinois", "parquet")
 
         super().replace_county_name_with_id()
 
@@ -446,14 +410,11 @@ class Ohio(CleanAndStore):
 
         if self.run_date == None:
 
-            self.df = self.df.select("date", "county", "state", "case").groupBy("date", "county", "state").agg(count("case").cast("int").alias("new_cases")).filter(self.df.date == self.run_date).orderBy("date", "county")
+            self.df = self.df.select("date", "county", "state", "case").groupBy("date", "county", "state").agg(count("case").cast("int").alias("new_cases")).orderBy("date", "county")
 
         else:
 
             self.df = self.df.select("date", "county", "state", "case").groupBy("date", "county", "state").agg(count("case").cast("int").alias("new_cases")).filter(self.df.date == self.run_date).orderBy("date", "county")
-
-        # Write preprocessed
-        super().save_file("ohio", "parquet")
 
         super().replace_county_name_with_id()
 
@@ -558,10 +519,7 @@ class Georgia(CleanAndStore):
 
         self.df = self.df.withColumn("state", lit("GA"))
 
-        self.df = self.df.filter("county != 'UNKNOWN'")
-
-        # Write preprocessed
-        super().save_file("georgia", "parquet")        
+        self.df = self.df.filter("county != 'UNKNOWN'")   
 
         self.df = self.df.select("date", "county", "state", "new_cases").orderBy("date", "county")
 
@@ -660,8 +618,8 @@ class Cases(CleanAndStore):
 
         self.df = spark.createDataFrame(self.df)
 
-        self.df = self.df.select(col("countyFIPS").cast("int").alias("county_fips"),
-                                upper(col("CountyName")).alias("county"),
+        self.df = self.df.select(col("countyFIPS").cast("int").alias("county_id"),
+                                upper(trim(regexp_replace(col("CountyName"), "County", ""))).alias("county"),
                                 col("State").alias("state"),
                                 col("StateFIPS").cast("int").alias("state_fips"),
                                 to_date(col("Date")).alias("date"),
@@ -675,16 +633,13 @@ class Cases(CleanAndStore):
 
         if self.run_date == None:
         
-            self.df = self.df.select("date", "county", "state", "new_cases")                  
+            self.df = self.df.select("date", "county_id", "county", "state", "new_cases")                  
 
         else:
 
-            self.df = self.df.select("date", "county", "state", "new_cases").filter(self.df.date == self.run_date)            
+            self.df = self.df.select("date", "county_id", "county", "state", "new_cases").filter(self.df.date == self.run_date)            
 
-        # Write preprocessed
-        super().save_file("cases", "parquet") 
-
-        super().replace_county_name_with_id()
+        self.df = self.df.select("date", "county_id", "new_cases")
 
         # Write to MySQL
         super().write_to_mysql("cases")
@@ -780,8 +735,8 @@ class Deaths(CleanAndStore):
 
         self.df = spark.createDataFrame(self.df)
 
-        self.df = self.df.select(col("countyFIPS").cast("int").alias("county_fips"),
-                                upper(col("CountyName")).alias("county"),
+        self.df = self.df.select(col("countyFIPS").cast("int").alias("county_id"),
+                                upper(trim(regexp_replace(col("CountyName"), "County", ""))).alias("county"),
                                 col("State").alias("state"),
                                 col("StateFIPS").cast("int").alias("state_fips"),
                                 to_date(col("Date")).alias("date"),
@@ -795,16 +750,13 @@ class Deaths(CleanAndStore):
 
         if self.run_date == None:    
 
-            self.df = self.df.select("date", "county", "state", "new_deaths")
+            self.df = self.df.select("date", "county_id", "county", "state", "new_deaths")
 
         else:
 
-            self.df = self.df.select("date", "county", "state", "new_deaths").filter(self.df.date == self.run_date)
+            self.df = self.df.select("date", "county_id", "county", "state", "new_deaths").filter(self.df.date == self.run_date)
 
-        # Write preprocessed
-        super().save_file("deaths", "parquet") 
-
-        super().replace_county_name_with_id()
+        self.df = self.df.select("date", "county_id", "new_deaths")
 
         # Write to MySQL
         super().write_to_mysql("deaths")
@@ -840,13 +792,25 @@ class Stocks:
         self.columns = ["date", "open", "high", "low", "close", "volume"]
         self.wrangle(load, save_path)
 
+    def write_to_mysql(self, table):
+        """
+        Write data to specified DB table
+        """
+
+        self.df.write.format('jdbc').options(
+            url=utils.db_url, 
+            driver=utils.db_driver, 
+            dbtable=table, 
+            user=utils.db_user, 
+            password=utils.db_pw).mode("append").save()
+
     def wrangle(self, load, save_path):
         """
         1. Retrieve path
-        2. Loop through all .json files (daily, weekly and monthly) for each stock
+        2. Loop through all .json files (daily and weekly) for each stock
         3. Create PySpark data frame from .json file
         4. Data cleaning and manipulation
-        5. Establish connection and write parquet files to Azure blob
+        5. Establish connection and write to DB
         """
 
         client = AzureBlobClient(connection_string=utils.connection_string)
@@ -857,20 +821,9 @@ class Stocks:
             stock = str(stock)[15:]
             end = stock.rfind("/")
             start = stock[:end].rfind("/")
-            stock_symbol = stock[start+1:end]
+            stock_symbol = stock[start+1:end].upper()
 
-            blob_service_client = BlobServiceClient(account_url=utils.blob_url, credential=utils.key)
-
-            blob_client = blob_service_client.get_blob_client(container=utils.container_name, blob=stock)
-
-            os.mkdir("tmp")
-
-            file_path = os.path.join("tmp", stock[stock.rfind("/")+1:])
-
-            with open(file_path, "wb") as file:
-                file.write(blob_client.download_blob().readall())
-
-            self.df = spark.read.json(file_path)
+            self.df = spark.read.json(f"wasbs://{utils.container_name}@{utils.storage_account}.blob.core.windows.net/{stock}")
             
             df_filename = self.df.withColumn("filename", input_file_name())
             filename = df_filename.select(col("filename")).first()
@@ -883,31 +836,12 @@ class Stocks:
                                     col("close").cast("float").alias("close"),
                                     col("volume").cast("float").alias("volume")).orderBy("date")
             
-            self.df = self.df.withColumn("stock", lit(upper(stock_symbol)))
+            self.df = self.df.withColumn("stock", lit(stock_symbol))
 
             if temp == "daily":
-                super().write_to_mysql("stocks_daily")
+                self.write_to_mysql("stocks_daily")
             elif temp == "weekly":
-                super().write_to_mysql("stocks_weekly")
-            else:
-                super().write_to_mysql("stocks_monthly")
-                    
-            # azure_save_path = f"{save_path}/{stock_symbol}/final/{temp}"
-
-            # self.df.write.parquet(azure_save_path)
-
-            # temp_path = Path(azure_save_path)
-
-            # for temp_file in temp_path.glob("*.parquet"):
-                
-            #     blob = BlobClient.from_connection_string(conn_str=utils.connection_string, container_name=utils.container_name, blob_name=f"{azure_save_path}/{temp_file.stem}{temp_file.suffix}") 
-
-            #     with open(temp_file, "rb") as file:
-            #         blob.upload_blob(file)
-
-            # shutil.rmtree(temp_path)            
-            
-            shutil.rmtree("tmp")
+                self.write_to_mysql("stocks_weekly")
 
 class Indicator(CleanAndStore):
 
@@ -918,34 +852,16 @@ class Indicator(CleanAndStore):
 
     def load_file(self, load, load_type):
         """
-        1. Download Azure Blob
-        2. Create tmp directory and file
-        3. Write Blob content to file
+        Retrieve file from Azure
         """
-        blob_service_client = BlobServiceClient(account_url=utils.blob_url, credential=utils.key)
+        self.df = spark.read.format(load_type).option("header", True).load(f"wasbs://{utils.container_name}@{utils.storage_account}.blob.core.windows.net/{load}")
 
-        blob_client = blob_service_client.get_blob_client(container=utils.container_name, blob=load)
-        downloader = blob_client.download_blob()
-
-        os.mkdir("tmp")
-
-        file_path = os.path.join("tmp", load[load.rfind("/")+1:])
-
-        with open(file_path, "wb") as file:
-            file.write(blob_client.download_blob().readall())
-
-        self.df = pd.read_json(f"tmp/{load[load.rfind('/')+1:]}")
-            
         # Output to log
         log.logging.info("{} file loaded for cleaning".format(load))
 
-        return self.df 
+        return self.df
 
     def wrangle(self):
-
-        self.df.reset_index(inplace=True)
-
-        self.df = spark.createDataFrame(self.df, ["date", self.indicator])
 
         self.df = self.df.select(to_date("date").alias("date"), col(self.indicator).cast("float").alias(self.indicator)).orderBy("date")
 
