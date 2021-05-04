@@ -81,6 +81,7 @@ class Florida(CovidData):
 
     def __init__(self, path, name, ext, mode, run_date):
         super().__init__(path, name, ext, mode, run_date)
+        self.year = self.name[-4:]
         self.offset = 0
         self.limit = 2000
         self.counter = 1
@@ -98,7 +99,14 @@ class Florida(CovidData):
 
             while True:
 
-                url = "https://services1.arcgis.com/CY1LXxl9zlJeBuRZ/arcgis/rest/services/Case_Data_{}/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&resultOffset={}&resultRecordCount={}&f=json".format(self.name[-4:], self.offset, self.limit)
+                if self.year == "2020":
+
+                    url = "https://services1.arcgis.com/CY1LXxl9zlJeBuRZ/arcgis/rest/services/Case_Data_{}/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&resultOffset={}&resultRecordCount={}&f=json".format(self.year, self.offset, self.limit)
+
+                else:
+
+                    url = "https://services1.arcgis.com/CY1LXxl9zlJeBuRZ/arcgis/rest/services/Florida_COVID19_Case_Line_Data_{}/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&resultOffset={}&resultRecordCount={}&f=json".format(self.year, self.offset, self.limit)
+
                 response = requests.get(url)
 
                 # Output to log
@@ -121,7 +129,7 @@ class Florida(CovidData):
                 self.counter += 1
 
                 # Pause program before submitting next API request
-                time.sleep(15)
+                time.sleep(5)
         else:
 
             url = f"https://services1.arcgis.com/CY1LXxl9zlJeBuRZ/arcgis/rest/services/Case_Data_2021/FeatureServer/0/query?where=EventDate%20%3E%3D%20TIMESTAMP%20'{run_date}%2000%3A00%3A00'%20AND%20EventDate%20%3C%3D%20TIMESTAMP%20'{run_date}%2000%3A00%3A00'&outFields=*&outSR=4326&f=json"
