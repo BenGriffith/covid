@@ -1,7 +1,6 @@
 ## Table of Contents
 - [General Info](#general-info)
 - [Technologies](#technologies)
-- [Setup](#setup)
 
 ## General Info
 In order to properly deploy resources (vaccines, medical supplies, testing / contact tracing, staffing) in response to the Covid Pandemic, my Data Engineering project will focus on tracking Covid cases across the United States at the country, state and county level. Additionally, I plan to gather and show the impact Covid has had on financial markets (individual stocks) and the United States economy.
