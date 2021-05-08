@@ -25,7 +25,7 @@ For stock market and economic indicator data, I used:
 I started by prototyping my data pipeline using one master OOP script invoking each activity of the pipeline without user intervention. I relied heavily on Python to facilitate data extraction and Pandas for data cleaning and processing. In the next iteration, I updated my data pipeline to primarily use PySpark for data cleaning and processing. In the most recent iteration, I performed the following:
 
 - Created an Apache Airflow DAG for data pipeline facilitation
-- Created and configured Azure VM to handle data extration and ingestion into Azure Blob
+- Created and configured Azure VM to handle data extraction and ingestion into Azure Blob
 - Created and configured Azure HDInsight Spark cluster using script actions and Ambari
 - Performed data cleaning and processing on HDInsight Spark cluster
 - Write processed data to MySQL instance on Azure
