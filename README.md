@@ -15,7 +15,7 @@ For the 8 most populous states, I relied on state provided data. For the remaini
 - Illinois (http://dph.illinois.gov/content/covid-19-county-cases-tests-and-deaths-day)
 - Ohio (https://coronavirus.ohio.gov/wps/portal/gov/covid-19/dashboards)
 - Georgia (https://covid-hub.gio.georgia.gov/datasets/georgia-covid-19-case-data)
-- Remaining Stats (https://usafacts.org/visualizations/coronavirus-covid-19-spread-map/)
+- Remaining States (https://usafacts.org/visualizations/coronavirus-covid-19-spread-map/)
 
 For stock market and economic indicator data, I used:
 
